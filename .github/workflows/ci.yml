@@ -1,0 +1,50 @@
+name: "CI: Lint, Typecheck, Test and Build"
+permissions: {}
+
+on:
+    - push
+    - pull_request
+
+jobs:
+    ci:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write # Required for annotating files
+        steps:
+            #
+            # Checkout the code
+            #
+            - name: Checkout code
+              uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+            #
+            # Setup PNPM
+            #
+            - name: Setup PNPM
+              uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+              with:
+                  run_install: false
+
+            #
+            # Setup Node.js
+            #
+            - name: Setup Node.js
+              uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+              with:
+                  node-version-file: .node-version
+
+            #
+            # Install dependencies
+            #
+            - name: Install Dependencies
+              shell: bash
+              run: |
+                  pnpm install --frozen-lockfile
+
+            #
+            # Run Lint + Typecheck + Test + Build
+            #
+            - name: Lint + Typecheck + Test + Build
+              shell: bash
+              run: |
+                  pnpm run prepublishOnly
