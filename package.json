@@ -1,0 +1,78 @@
+{
+  "name": "mali-signali",
+  "version": "1.0.0",
+  "author": "Aleksandar Ružičić",
+  "license": "MIT",
+  "description": "A Lightweight, framework-agnostic TypeScript library for reactive state management.",
+  "keywords": [
+    "state",
+    "state management",
+    "signal",
+    "effect",
+    "signal pattern",
+    "reactivity"
+  ],
+  "homepage": "https://github.com/raleksandar/mali-signali",
+  "repository": "github:raleksandar/mali-signali",
+  "bugs": {
+    "url": "https://github.com/raleksandar/mali-signali/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    "require": {
+      "types": "./dist/index.d.cts",
+      "default": "./dist/index.cjs"
+    },
+    "import": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "directory": "package"
+  },
+  "clean-publish": {
+    "withoutPublish": true,
+    "tempDir": "package",
+    "fields": [
+      "packageManager",
+      "pnpm",
+      "publishConfig",
+      "scripts"
+    ]
+  },
+  "scripts": {
+    "build": "pkgroll --target=node20 --minify --sourcemap",
+    "lint": "eslint ./src",
+    "postpublish": "rm -rf ./package",
+    "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && rm -rf ./package && clean-publish && attw --pack ./package",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.16.4",
+    "@eslint/js": "9.10.0",
+    "@types/eslint__js": "8.42.3",
+    "@types/node": "22.5.5",
+    "@vitest/coverage-v8": "2.1.1",
+    "clean-publish": "5.0.0",
+    "eslint": "9.10.0",
+    "glob": "11.0.0",
+    "happy-dom": "15.7.4",
+    "pkgroll": "2.5.0",
+    "prettier": "3.3.3",
+    "tsx": "4.19.1",
+    "typescript": "5.6.2",
+    "typescript-eslint": "8.6.0",
+    "typescript-eslint-language-service": "5.0.5",
+    "vitest": "2.1.1"
+  },
+  "packageManager": "pnpm@9.10.0+sha512.73a29afa36a0d092ece5271de5177ecbf8318d454ecd701343131b8ebc0c1a91c487da46ab77c8e596d6acf1461e3594ced4becedf8921b074fbd8653ed7051c"
+}
