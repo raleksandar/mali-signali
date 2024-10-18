@@ -241,6 +241,57 @@ describe('effect()', () => {
             });
         }).toThrowError('Cyclic dependency detected');
     });
+
+    it('Accepts AbortSignal to cancel the effect.', () => {
+        const [get, set] = signal(0);
+
+        const fx = vi.fn(() => {
+            value = get();
+        });
+
+        const controller = new AbortController();
+        let value = -1;
+
+        effect(fx, { signal: controller.signal });
+
+        expect(value).toBe(0);
+        expect(fx).toBeCalledTimes(1);
+
+        set(42);
+
+        expect(value).toBe(42);
+        expect(fx).toBeCalledTimes(2);
+
+        controller.abort();
+
+        set(73);
+
+        expect(value).toBe(42);
+        expect(fx).toBeCalledTimes(2);
+    });
+
+    it('Does not run the effect if the AbortSignal is already aborted.', () => {
+        const [get, set] = signal(0);
+
+        const fx = vi.fn(() => {
+            value = get();
+        });
+
+        const controller = new AbortController();
+        let value = -1;
+
+        controller.abort();
+
+        effect(fx, { signal: controller.signal });
+
+        expect(value).toBe(-1);
+        expect(fx).toBeCalledTimes(0);
+
+        set(42);
+
+        expect(value).toBe(-1);
+        expect(fx).toBeCalledTimes(0);
+    });
 });
 
 describe('untracked()', () => {

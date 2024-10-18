@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `untracked()` - A function that reads the value of a signal without tracking it.
+- `signal` option to `effect()` and `memo()` - An instance of `AbortSignal` that can be used to unlink all dependencies when the signal is aborted.
 - `structuralEqual()` - a structural equality function which uses `Object.is()` semantics.
 - `looseStructuralEqual()` - a structural equality function which uses `==` semantics.
 

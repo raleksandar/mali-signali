@@ -1,4 +1,10 @@
-import { createStore, type Signal, type SignalOptions, type SignalReader } from './store';
+import {
+    createStore,
+    type EffectOptions,
+    type Signal,
+    type SignalOptions,
+    type SignalReader,
+} from './store';
 
 /**
  * The global store.
@@ -41,10 +47,11 @@ export function untracked<T>(read: SignalReader<T>): T {
  * Returns a cleanup function that should be called when the effect is no longer needed.
  *
  * @param execute The function to execute.
+ * @param options Optional parameters for customizing the behavior.
  * @returns A cleanup function.
  */
-export function effect(execute: () => void): () => void {
-    return globalStore.effect(execute);
+export function effect(execute: () => void, options?: EffectOptions): () => void {
+    return globalStore.effect(execute, options);
 }
 
 /**
@@ -59,7 +66,10 @@ export function effect(execute: () => void): () => void {
  * @param options Optional parameters for customizing the behavior.
  * @returns A getter function.
  */
-export function memo<T>(compute: () => T, options?: SignalOptions): SignalReader<T> {
+export function memo<T>(
+    compute: () => T,
+    options?: SignalOptions & EffectOptions,
+): SignalReader<T> {
     return globalStore.memo(compute, options);
 }
 

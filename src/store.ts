@@ -15,6 +15,16 @@ export interface SignalOptions {
 }
 
 /**
+ * The `EffectConstructor` options.
+ */
+export interface EffectOptions {
+    /**
+     * The optional abort signal to cancel the effect.
+     */
+    readonly signal?: AbortSignal;
+}
+
+/**
  * A function that reads and returns a signal value.
  */
 export type SignalReader<T> = () => T;
@@ -67,9 +77,10 @@ export type UntrackedReader = <T>(read: SignalReader<T>) => T;
  * Returns a cleanup function that should be called when the effect is no longer needed.
  *
  * @param execute The function to execute.
+ * @param options Optional parameters for customizing the behavior.
  * @returns A cleanup function.
  */
-export type EffectConstructor = (execute: () => void) => () => void;
+export type EffectConstructor = (execute: () => void, options?: EffectOptions) => () => void;
 
 /**
  * Creates a new computed (and read-only) signal.
@@ -83,7 +94,10 @@ export type EffectConstructor = (execute: () => void) => () => void;
  * @param options Optional parameters for customizing the behavior.
  * @returns A getter function.
  */
-export type MemoConstructor = <T>(compute: () => T, options?: SignalOptions) => SignalReader<T>;
+export type MemoConstructor = <T>(
+    compute: () => T,
+    options?: SignalOptions & EffectOptions,
+) => SignalReader<T>;
 
 /**
  * Executes a batch of updates.
@@ -261,7 +275,13 @@ const store = class Store implements Store {
         }
     }
 
-    #createEffect(execute: () => void, isMemo: boolean): () => void {
+    #createEffect(
+        execute: () => void,
+        { isMemo = false, signal }: { isMemo?: boolean } & EffectOptions = {},
+    ): () => void {
+        if (signal && signal.aborted) {
+            return () => {};
+        }
         // eslint-disable-next-line prefer-const
         let fx: EffectInstance;
 
@@ -283,6 +303,10 @@ const store = class Store implements Store {
                 }
             }
         };
+
+        if (signal) {
+            signal.addEventListener('abort', cleanup, { once: true });
+        }
 
         const update = () => {
             cleanup();
@@ -316,16 +340,17 @@ const store = class Store implements Store {
         return cleanup;
     }
 
-    public effect = (execute: () => void): (() => void) => {
-        return this.#createEffect(execute, false);
+    public effect = (execute: () => void, options?: EffectOptions): (() => void) => {
+        return this.#createEffect(execute, options);
     };
 
-    public memo = <T>(compute: () => T, options?: SignalOptions): SignalReader<T> => {
+    public memo = <T>(
+        compute: () => T,
+        options?: SignalOptions & EffectOptions,
+    ): SignalReader<T> => {
         const [read, write] = this.signal<T>(undefined as T, options);
 
-        this.#createEffect(() => {
-            write(compute());
-        }, true);
+        this.#createEffect(() => write(compute()), { ...options, isMemo: true });
 
         return read;
     };

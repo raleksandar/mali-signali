@@ -119,6 +119,29 @@ cancel();
 setCount(3); // nothing happens
 ```
 
+In addition to canceling via the returned function, effects can be canceled via an instance of `AbortSignal`.
+
+```ts
+import { signal, effect } from 'mali-signali';
+
+const [a, setA] = signal(1);
+const [b, setB] = signal(2);
+
+const abortController = new AbortController();
+
+effect(() => { console.log(a()); }, { signal: abortController.signal }); // logs '1'
+effect(() => { console.log(b()); }, { signal: abortController.signal }); // logs '2'
+
+setA(3); // logs '3'
+setB(4); // logs '4'
+
+abortController.abort();
+
+setA(5); // nothing happens
+setB(6); // nothing happens
+```
+
+
 ## Untracked reads
 
 For cases where you need to read the value of a signal without tracking it as a dependency, you can call the reader function via `untracked()`.
