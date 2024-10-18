@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2024-10-18
 ### Added
 - `untracked()` - A function that reads the value of a signal without tracking it.
 - `signal` option to `effect()` and `memo()` - An instance of `AbortSignal` that can be used to unlink all dependencies when the signal is aborted.
@@ -19,4 +20,5 @@ All notable changes to this project will be documented in this file.
 - Initial release
 
 [Unreleased]: https://github.com/raleksandar/mali-signali/compare/v1.0.0...HEAD
+[1.1.0]: https://github.com/raleksandar/mali-signali/releases/tag/v1.1.0
 [1.0.0]: https://github.com/raleksandar/mali-signali/releases/tag/v1.0.0
