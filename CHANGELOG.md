@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - The `SignalOptions.equals` option now defaults to `structuralEqual()` instead of `Object.is()`.
+- The tuple returned by `signal()` is now typed as `readonly`.
 
 ## [1.0.0] - 2024-09-19
 ### Added

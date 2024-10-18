@@ -33,7 +33,7 @@ export type SignalUpdater<T> = (value: T | ((prevValue: T) => T)) => void;
  *
  * It also has `read()` and `update()` methods for convenience.
  */
-export type Signal<T> = [get: SignalReader<T>, set: SignalUpdater<T>] & {
+export type Signal<T> = readonly [get: SignalReader<T>, set: SignalUpdater<T>] & {
     read: SignalReader<T>;
     update: SignalUpdater<T>;
 };
@@ -204,7 +204,7 @@ const store = class Store implements Store {
             this.#flush();
         };
 
-        return new signalTuple(read, write) as Signal<T>;
+        return new signalTuple(read, write) as unknown as Signal<T>;
     };
 
     #flush(): void {
