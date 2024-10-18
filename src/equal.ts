@@ -67,6 +67,16 @@ export function equalFunc(options?: EqualityOptions): (a: unknown, b: unknown) =
 }
 
 /**
+ * A structural equality function which uses Object.is() semantics.
+ */
+export const structuralEqual = equalFunc({ compare: 'strict' });
+
+/**
+ * A structural equality function based on the == semantics.
+ */
+export const looseStructuralEqual = equalFunc({ compare: 'loose' });
+
+/**
  * Returns DeepEqualParams from the specified EqualityOptions.
  *
  * @param options - The EqualityOptions to convert.

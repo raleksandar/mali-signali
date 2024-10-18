@@ -1,3 +1,5 @@
+import { structuralEqual } from './equal';
+
 /**
  * The `SignalConstructor` options.
  */
@@ -7,7 +9,7 @@ export interface SignalOptions {
      *
      * If the function returns `true` the signal will not trigger an update.
      *
-     * Defaults to `Object.is`.
+     * Defaults to `structuralEqual()`.
      */
     readonly equals?: (a: unknown, b: unknown) => boolean;
 }
@@ -167,7 +169,10 @@ const store = class Store implements Store {
     readonly #pendingEffects: Set<EffectInstance> = new Set();
     readonly #runningEffects: EffectInstance[] = [];
 
-    public signal = <T>(initialValue: T, { equals = Object.is }: SignalOptions = {}): Signal<T> => {
+    public signal = <T>(
+        initialValue: T,
+        { equals = structuralEqual }: SignalOptions = {},
+    ): Signal<T> => {
         const dependencies = new Set<EffectInstance>();
         let value = initialValue;
 
