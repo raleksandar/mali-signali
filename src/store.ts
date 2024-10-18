@@ -54,6 +54,11 @@ export type Signal<T> = readonly [get: SignalReader<T>, set: SignalUpdater<T>] &
 export type SignalConstructor = <T>(initialValue: T, options?: SignalOptions) => Signal<T>;
 
 /**
+ * A function that reads the value of a signal without tracking it.
+ */
+export type UntrackedReader = <T>(read: SignalReader<T>) => T;
+
+/**
  * Creates and executes a new effect.
  *
  * An effect is a function which will be automatically
@@ -110,6 +115,13 @@ export interface Store {
      * @returns A `[read, update]` tuple of accessor functions.
      */
     readonly signal: SignalConstructor;
+
+    /**
+     * Reads the value of a signal without tracking it.
+     *
+     * @param read The signal reader function.
+     */
+    readonly untracked: UntrackedReader;
 
     /**
      * Creates and executes a new effect.
@@ -169,6 +181,7 @@ const signalTuple = class Signal<T> extends Array<SignalReader<T> | SignalUpdate
 const store = class Store implements Store {
     #batchLevel = 0;
     #isUpdating = false;
+    #isTracking = true;
     readonly #pendingEffects: Set<EffectInstance> = new Set();
     readonly #runningEffects: EffectInstance[] = [];
 
@@ -180,10 +193,12 @@ const store = class Store implements Store {
         let value = initialValue;
 
         const read = (): T => {
-            const fx = this.#runningEffects.at(-1);
-            if (fx && !dependencies.has(fx)) {
-                dependencies.add(fx);
-                fx.onCleanup(() => dependencies.delete(fx));
+            if (this.#isTracking) {
+                const fx = this.#runningEffects.at(-1);
+                if (fx && !dependencies.has(fx)) {
+                    dependencies.add(fx);
+                    fx.onCleanup(() => dependencies.delete(fx));
+                }
             }
             return value;
         };
@@ -205,6 +220,18 @@ const store = class Store implements Store {
         };
 
         return new signalTuple(read, write) as unknown as Signal<T>;
+    };
+
+    public untracked = <T>(read: SignalReader<T>): T => {
+        const wasTracking = this.#isTracking;
+
+        this.#isTracking = false;
+
+        const value = read();
+
+        this.#isTracking = wasTracking;
+
+        return value;
     };
 
     #flush(): void {

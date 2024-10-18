@@ -7,6 +7,7 @@ import type {
     Signal,
     SignalConstructor,
     Store,
+    UntrackedReader,
 } from './store';
 
 describe('public API', () => {
@@ -21,6 +22,7 @@ describe('public API', () => {
         expect(store.memo).toBeInstanceOf(Function);
         expect(store.signal).toBeInstanceOf(Function);
         expect(store.batch).toBeInstanceOf(Function);
+        expect(store.untracked).toBeInstanceOf(Function);
     });
 
     it('should expose the signal() function', async () => {
@@ -47,6 +49,22 @@ describe('public API', () => {
             value = 43;
         });
         expect(value).toBe(43);
+        cleanup();
+    });
+
+    it('should expose the untracked() function', async () => {
+        expect(api.untracked).toBeDefined();
+        expect(api.untracked).toBeInstanceOf(Function);
+        expectTypeOf(api.untracked).toEqualTypeOf<UntrackedReader>();
+
+        const [get, set] = api.signal(42);
+        let value = 0;
+        const cleanup = api.effect(() => {
+            value = api.untracked(get);
+        });
+        expect(value).toBe(42);
+        set(73);
+        expect(value).toBe(42);
         cleanup();
     });
 

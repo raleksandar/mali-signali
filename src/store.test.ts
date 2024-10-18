@@ -8,6 +8,7 @@ import {
     type SignalConstructor,
     type SignalReader,
     type SignalUpdater,
+    type UntrackedReader,
 } from './store';
 
 describe('createStore()', () => {
@@ -18,6 +19,7 @@ describe('createStore()', () => {
         expect(store.effect).toBeInstanceOf(Function);
         expect(store.memo).toBeInstanceOf(Function);
         expect(store.batch).toBeInstanceOf(Function);
+        expect(store.untracked).toBeInstanceOf(Function);
     });
 
     it('Effects from one store do not react to signal changes in another store.', () => {
@@ -238,6 +240,43 @@ describe('effect()', () => {
                 setB(a() + 1);
             });
         }).toThrowError('Cyclic dependency detected');
+    });
+});
+
+describe('untracked()', () => {
+    let signal: SignalConstructor;
+    let effect: EffectConstructor;
+    let untracked: UntrackedReader;
+
+    beforeEach(() => {
+        const store = createStore();
+        signal = store.signal;
+        effect = store.effect;
+        untracked = store.untracked;
+    });
+
+    it('Reads the value of a signal without tracking it.', () => {
+        const [a, setA] = signal(1);
+        const [b, setB] = signal(2);
+
+        const fx = vi.fn(() => {
+            setA(untracked(a) + b());
+        });
+
+        effect(fx);
+
+        expect(a()).toBe(3);
+        expect(fx).toBeCalledTimes(1);
+
+        setA(0);
+
+        expect(a()).toBe(0);
+        expect(fx).toBeCalledTimes(1);
+
+        setB(3);
+
+        expect(a()).toBe(3);
+        expect(fx).toBeCalledTimes(2);
     });
 });
 

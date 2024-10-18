@@ -119,6 +119,24 @@ cancel();
 setCount(3); // nothing happens
 ```
 
+## Untracked reads
+
+For cases where you need to read the value of a signal without tracking it as a dependency, you can call the reader function via `untracked()`.
+
+```ts
+import { signal, effect, untracked } from 'mali-signali';
+
+const [a, setA] = signal(1);
+const [b, setB] = signal(2);
+
+effect(() => {
+  setA(untracked(a) + b());  // effect reads but does not depend on 'a'
+});
+
+setB(3);
+console.log(a()); // 6
+```
+
 ## Batching
 
 The `batch()` function can be used to batch updates to signals. This can be useful when multiple signals are updated in quick succession, as it prevents unnecessary re-runs of effects.

@@ -24,6 +24,15 @@ export function signal<T>(initialValue: T, options?: SignalOptions): Signal<T> {
 }
 
 /**
+ * Reads the value of a signal without tracking it.
+ *
+ * @param read The signal reader function.
+ */
+export function untracked<T>(read: SignalReader<T>): T {
+    return globalStore.untracked(read);
+}
+
+/**
  * Creates and executes a new effect in the global store.
  *
  * An effect is a function which will be automatically
