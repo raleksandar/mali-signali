@@ -15,6 +15,16 @@ export interface SignalOptions {
 }
 
 /**
+ * A function that reads and returns a signal value.
+ */
+export type SignalReader<T> = () => T;
+
+/**
+ * A function that updates a signal value.
+ */
+export type SignalUpdater<T> = (value: T | ((prevValue: T) => T)) => void;
+
+/**
  * A signal is a reactive unit of state that can be read and updated.
  *
  * It is a tuple of two functions:
@@ -23,9 +33,9 @@ export interface SignalOptions {
  *
  * It also has `read()` and `update()` methods for convenience.
  */
-export type Signal<T> = [read: () => T, update: (value: T | ((prevValue: T) => T)) => void] & {
-    read(): T;
-    update(value: T | ((prevValue: T) => T)): void;
+export type Signal<T> = [get: SignalReader<T>, set: SignalUpdater<T>] & {
+    read: SignalReader<T>;
+    update: SignalUpdater<T>;
 };
 
 /**
@@ -68,7 +78,7 @@ export type EffectConstructor = (execute: () => void) => () => void;
  * @param options Optional parameters for customizing the behavior.
  * @returns A getter function.
  */
-export type MemoConstructor = <T>(compute: () => T, options?: SignalOptions) => () => T;
+export type MemoConstructor = <T>(compute: () => T, options?: SignalOptions) => SignalReader<T>;
 
 /**
  * Executes a batch of updates.
@@ -145,21 +155,14 @@ interface EffectInstance {
     readonly onCleanup: (unlink: () => void) => void;
 }
 
-const signalTuple = class Signal<T> extends Array<
-    (() => T) | ((value: T | ((prevValue: T) => T)) => void)
-> {
-    constructor(read: () => T, write: (value: T | ((prevValue: T) => T)) => void) {
+const signalTuple = class Signal<T> extends Array<SignalReader<T> | SignalUpdater<T>> {
+    public readonly read: SignalReader<T>;
+    public readonly update: SignalUpdater<T>;
+
+    constructor(read: SignalReader<T>, update: SignalUpdater<T>) {
         super(2);
-        this[0] = read;
-        this[1] = write;
-    }
-
-    public read(): T {
-        return (this[0] as () => T)();
-    }
-
-    public update(value: T | ((prevValue: T) => T)): void {
-        (this[1] as (value: T | ((prevValue: T) => T)) => void)(value);
+        this.read = this[0] = read;
+        this.update = this[1] = update;
     }
 };
 
@@ -290,7 +293,7 @@ const store = class Store implements Store {
         return this.#createEffect(execute, false);
     };
 
-    public memo = <T>(compute: () => T, options?: SignalOptions): (() => T) => {
+    public memo = <T>(compute: () => T, options?: SignalOptions): SignalReader<T> => {
         const [read, write] = this.signal<T>(undefined as T, options);
 
         this.#createEffect(() => {

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { equalFunc } from './equal';
 import {
     createStore,
@@ -6,6 +6,8 @@ import {
     type EffectConstructor,
     type MemoConstructor,
     type SignalConstructor,
+    type SignalReader,
+    type SignalUpdater,
 } from './store';
 
 describe('createStore()', () => {
@@ -59,8 +61,11 @@ describe('signal()', () => {
 
         expect(count).toHaveProperty('read');
         expect(count.read).toBeInstanceOf(Function);
+        expectTypeOf(count.read).toEqualTypeOf<SignalReader<number>>();
+
         expect(count).toHaveProperty('update');
         expect(count.update).toBeInstanceOf(Function);
+        expectTypeOf(count.update).toEqualTypeOf<SignalUpdater<number>>();
 
         expect(count.read()).toBe(0);
         count.update(42);

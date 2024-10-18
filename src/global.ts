@@ -1,4 +1,4 @@
-import { createStore, type Signal, type SignalOptions } from './store';
+import { createStore, type Signal, type SignalOptions, type SignalReader } from './store';
 
 /**
  * The global store.
@@ -50,7 +50,7 @@ export function effect(execute: () => void): () => void {
  * @param options Optional parameters for customizing the behavior.
  * @returns A getter function.
  */
-export function memo<T>(compute: () => T, options?: SignalOptions): () => T {
+export function memo<T>(compute: () => T, options?: SignalOptions): SignalReader<T> {
     return globalStore.memo(compute, options);
 }
 
