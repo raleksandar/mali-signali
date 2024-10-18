@@ -54,6 +54,19 @@ describe('signal()', () => {
         expect(get()).toBe(42);
     });
 
+    it('Returns an object with read and update functions.', () => {
+        const count = signal(0);
+
+        expect(count).toHaveProperty('read');
+        expect(count.read).toBeInstanceOf(Function);
+        expect(count).toHaveProperty('update');
+        expect(count.update).toBeInstanceOf(Function);
+
+        expect(count.read()).toBe(0);
+        count.update(42);
+        expect(count.read()).toBe(42);
+    });
+
     it('Allows setting the value using a function.', () => {
         const [get, set] = signal(0);
         set((prevValue) => prevValue + 1);
