@@ -21,6 +21,7 @@ describe('createStore()', () => {
         expect(store.memo).toBeInstanceOf(Function);
         expect(store.batch).toBeInstanceOf(Function);
         expect(store.untracked).toBeInstanceOf(Function);
+        expect(store.unlink).toBeInstanceOf(Function);
     });
 
     it('Effects from one store do not react to signal changes in another store.', () => {
@@ -441,5 +442,120 @@ describe('batch()', () => {
         });
 
         expect(fx).toBeCalledTimes(2);
+    });
+});
+
+describe('unlink()', () => {
+    it('Unlinks all effects.', async () => {
+        const store = createStore();
+
+        const [a, setA] = store.signal(1);
+        const [b, setB] = store.signal(2);
+        const [c, setC] = store.signal(3);
+
+        let aValue = 0;
+        let bValue = 0;
+        let cValue = 0;
+
+        const fx1 = vi.fn(() => {
+            aValue = a();
+        });
+
+        const fx2 = vi.fn(() => {
+            bValue = b();
+        });
+
+        const fx3 = vi.fn(() => {
+            cValue = c();
+        });
+
+        store.effect(fx1);
+        store.effect(fx2);
+        store.effect(fx3);
+
+        expect(aValue).toBe(1);
+        expect(fx1).toBeCalledTimes(1);
+
+        expect(bValue).toBe(2);
+        expect(fx2).toBeCalledTimes(1);
+
+        expect(cValue).toBe(3);
+        expect(fx3).toBeCalledTimes(1);
+
+        setA(42);
+        setB(73);
+        setC(100);
+
+        expect(aValue).toBe(42);
+        expect(fx1).toBeCalledTimes(2);
+
+        expect(bValue).toBe(73);
+        expect(fx2).toBeCalledTimes(2);
+
+        expect(cValue).toBe(100);
+        expect(fx3).toBeCalledTimes(2);
+
+        await store.unlink();
+
+        setA(1000);
+        setB(2000);
+        setC(3000);
+
+        expect(aValue).toBe(42);
+        expect(fx1).toBeCalledTimes(2);
+
+        expect(bValue).toBe(73);
+        expect(fx2).toBeCalledTimes(2);
+
+        expect(cValue).toBe(100);
+        expect(fx3).toBeCalledTimes(2);
+    });
+
+    it('Does not unlink effects from other stores.', async () => {
+        const store1 = createStore();
+        const store2 = createStore();
+
+        const [a, setA] = store1.signal(1);
+        const [b, setB] = store2.signal(2);
+
+        let aValue = 0;
+        let bValue = 0;
+
+        const fx1 = vi.fn(() => {
+            aValue = a();
+        });
+
+        const fx2 = vi.fn(() => {
+            bValue = b();
+        });
+
+        store1.effect(fx1);
+        store2.effect(fx2);
+
+        expect(aValue).toBe(1);
+        expect(fx1).toBeCalledTimes(1);
+
+        expect(bValue).toBe(2);
+        expect(fx2).toBeCalledTimes(1);
+
+        setA(42);
+        setB(73);
+
+        expect(aValue).toBe(42);
+        expect(fx1).toBeCalledTimes(2);
+
+        expect(bValue).toBe(73);
+        expect(fx2).toBeCalledTimes(2);
+
+        await store1.unlink();
+
+        setA(1000);
+        setB(2000);
+
+        expect(aValue).toBe(42);
+        expect(fx1).toBeCalledTimes(2);
+
+        expect(bValue).toBe(2000);
+        expect(fx2).toBeCalledTimes(3);
     });
 });

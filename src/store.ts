@@ -188,11 +188,26 @@ export interface Store {
      * @param execute The function to execute.
      */
     readonly batch: BatchFunction;
+
+    /**
+     * Unlinks all effects in this Store.
+     *
+     * Use this when you want to "dispose" of a store.
+     *
+     * After this method is called, all effects and memos will become inert.
+     * Reads are still allowed, but updates will not trigger any effects.
+     *
+     * Creating new signals/memos/effects after this method is called is not recommended.
+     *
+     * Treat this as a "destruct" method.
+     */
+    unlink(): Promise<void>;
 }
 
 interface EffectInstance {
     readonly isMemo: boolean;
     readonly update: () => void;
+    readonly cancel: () => void;
     readonly onCleanup: (unlink: () => void) => void;
 }
 
@@ -213,6 +228,7 @@ const store = class Store implements Store {
     #isTracking = true;
     readonly #pendingEffects: Set<EffectInstance> = new Set();
     readonly #runningEffects: EffectInstance[] = [];
+    readonly #activeEffects: Set<EffectInstance> = new Set();
 
     public signal = <T>(
         initialValue: T,
@@ -309,6 +325,7 @@ const store = class Store implements Store {
             }
 
             dependencies.clear();
+            this.#activeEffects.delete(fx);
 
             if (onCleanup) {
                 try {
@@ -333,6 +350,7 @@ const store = class Store implements Store {
             this.#runningEffects.push(fx);
 
             try {
+                this.#activeEffects.add(fx);
                 onCleanup = execute({ cancel });
             } catch (error) {
                 cancel();
@@ -345,6 +363,7 @@ const store = class Store implements Store {
         fx = {
             isMemo,
             update,
+            cancel,
             onCleanup(unlink) {
                 dependencies.add(unlink);
             },
@@ -381,6 +400,15 @@ const store = class Store implements Store {
             }
         }
     };
+
+    public unlink(): Promise<void> {
+        return Promise.resolve().then(() => {
+            for (const fx of this.#activeEffects) {
+                fx.cancel();
+            }
+            this.#activeEffects.clear();
+        });
+    }
 };
 
 /**

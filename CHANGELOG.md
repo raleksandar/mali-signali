@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Added
+- `unlink()` method on `Store` instances - Unlinks (cancels) all effects and memos in the store.
 
 ## [1.2.0] - 2024-11-24
 ### Added

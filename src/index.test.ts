@@ -23,6 +23,7 @@ describe('public API', () => {
         expect(store.signal).toBeInstanceOf(Function);
         expect(store.batch).toBeInstanceOf(Function);
         expect(store.untracked).toBeInstanceOf(Function);
+        expect(store.unlink).toBeInstanceOf(Function);
     });
 
     it('should expose the signal() function', async () => {

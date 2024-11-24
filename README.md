@@ -222,6 +222,7 @@ The `createStore()` returns an object with `signal()`, `memo()`, `effect()`, and
 
 The global functions `signal()`, `memo()`, `effect()`, and `batch()` are simply shortcuts for the default library-global store.
 
+The `unlink()` method of a `Store` instance can be used to unlink (cancel) all effects and memos in the store. This should be used as a cleanup mechanism when the store is no longer needed.
 
 ## License
 
