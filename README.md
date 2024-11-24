@@ -141,6 +141,28 @@ setA(5); // nothing happens
 setB(6); // nothing happens
 ```
 
+Canceling an effect from within the effect itself can be done via `AbortSignal` as explained above,
+or via the `cancel()` function of an `EffectContext` object passed to the effect function.
+
+```ts
+import { signal, effect } from 'mali-signali';
+
+const [get, set] = signal(1);
+
+effect(({ cancel }) => {
+  const value = get();
+  console.log(value);
+  if (value === 73) {
+    cancel();
+  }
+});
+
+set(42); // logs '42'
+set(73); // logs '73'
+set(0); // nothing happens
+set(1); // nothing happens
+```
+
 
 ## Untracked reads
 

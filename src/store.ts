@@ -69,6 +69,21 @@ export type SignalConstructor = <T>(initialValue: T, options?: SignalOptions) =>
 export type UntrackedReader = <T>(read: SignalReader<T>) => T;
 
 /**
+ * The context object passed to the effect function.
+ */
+export interface EffectContext {
+    /**
+     * Cancels the effect when called.
+     */
+    cancel: (this: void) => void;
+}
+
+/**
+ * The effect function.
+ */
+export type EffectFunction = (context: EffectContext) => void;
+
+/**
  * Creates and executes a new effect.
  *
  * An effect is a function which will be automatically
@@ -80,7 +95,7 @@ export type UntrackedReader = <T>(read: SignalReader<T>) => T;
  * @param options Optional parameters for customizing the behavior.
  * @returns A cleanup function.
  */
-export type EffectConstructor = (execute: () => void, options?: EffectOptions) => () => void;
+export type EffectConstructor = (execute: EffectFunction, options?: EffectOptions) => () => void;
 
 /**
  * Creates a new computed (and read-only) signal.
@@ -276,7 +291,7 @@ const store = class Store implements Store {
     }
 
     #createEffect(
-        execute: () => void,
+        execute: EffectFunction,
         { isMemo = false, signal }: { isMemo?: boolean } & EffectOptions = {},
     ): () => void {
         if (signal && signal.aborted) {
@@ -288,7 +303,7 @@ const store = class Store implements Store {
         const dependencies = new Set<() => void>();
         let onCleanup: (() => void) | void;
 
-        const cleanup = () => {
+        const cancel = () => {
             for (const unlink of dependencies) {
                 unlink();
             }
@@ -305,11 +320,11 @@ const store = class Store implements Store {
         };
 
         if (signal) {
-            signal.addEventListener('abort', cleanup, { once: true });
+            signal.addEventListener('abort', cancel, { once: true });
         }
 
         const update = () => {
-            cleanup();
+            cancel();
 
             if (this.#runningEffects.includes(fx)) {
                 throw new Error('Cyclic dependency detected');
@@ -318,9 +333,9 @@ const store = class Store implements Store {
             this.#runningEffects.push(fx);
 
             try {
-                onCleanup = execute();
+                onCleanup = execute({ cancel });
             } catch (error) {
-                cleanup();
+                cancel();
                 throw error;
             } finally {
                 this.#runningEffects.pop();
@@ -337,10 +352,10 @@ const store = class Store implements Store {
 
         update();
 
-        return cleanup;
+        return cancel;
     }
 
-    public effect = (execute: () => void, options?: EffectOptions): (() => void) => {
+    public effect = (execute: EffectFunction, options?: EffectOptions): (() => void) => {
         return this.#createEffect(execute, options);
     };
 

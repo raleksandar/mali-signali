@@ -4,6 +4,7 @@ import {
     createStore,
     type BatchFunction,
     type EffectConstructor,
+    type EffectContext,
     type MemoConstructor,
     type SignalConstructor,
     type SignalReader,
@@ -291,6 +292,34 @@ describe('effect()', () => {
 
         expect(value).toBe(-1);
         expect(fx).toBeCalledTimes(0);
+    });
+
+    it('Cancels the effect when context.cancel() is called within the effect', () => {
+        const [get, set] = signal(100);
+
+        const fx = vi.fn((context: EffectContext) => {
+            value = get();
+            if (value === 42) {
+                context.cancel();
+            }
+        });
+
+        let value = -1;
+
+        effect(fx);
+
+        expect(value).toBe(100);
+        expect(fx).toBeCalledTimes(1);
+
+        set(42);
+
+        expect(value).toBe(42);
+        expect(fx).toBeCalledTimes(2);
+
+        set(73);
+
+        expect(value).toBe(42);
+        expect(fx).toBeCalledTimes(2);
     });
 });
 

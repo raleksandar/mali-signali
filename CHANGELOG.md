@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Added
+- `EffectContext` - An effect context object with a `cancel()` function that can be used to cancel the effect.
 
 ## [1.1.0] - 2024-10-18
 ### Added
