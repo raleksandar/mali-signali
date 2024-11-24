@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+## [1.2.0] - 2024-11-24
 ### Added
 - `EffectContext` - An effect context object with a `cancel()` function that can be used to cancel the effect.
 
@@ -21,6 +23,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/raleksandar/mali-signali/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/raleksandar/mali-signali/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/raleksandar/mali-signali/releases/tag/v1.2.0
 [1.1.0]: https://github.com/raleksandar/mali-signali/releases/tag/v1.1.0
 [1.0.0]: https://github.com/raleksandar/mali-signali/releases/tag/v1.0.0
