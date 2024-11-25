@@ -57,7 +57,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "0.16.4",
+    "@arethetypeswrong/cli": "0.17.0",
     "@eslint/js": "9.15.0",
     "@types/eslint__js": "8.42.3",
     "@types/node": "22.9.0",
