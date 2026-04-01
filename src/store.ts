@@ -600,13 +600,11 @@ const store = class Store implements Store {
             }
 
             if (run.state === 'canceled') {
-                if (concurrency === 'cancel' && pendingRerun && !hasBlockingRun()) {
+                if (pendingRerun) {
                     pendingRerun = false;
                     startRun();
-                    return;
                 }
 
-                startNextQueuedRun();
                 return;
             }
 
@@ -626,12 +624,6 @@ const store = class Store implements Store {
                 currentCommittedRun = run;
             } else {
                 cleanupRun(run);
-            }
-
-            if (concurrency === 'cancel' && pendingRerun && !hasBlockingRun()) {
-                pendingRerun = false;
-                startRun();
-                return;
             }
 
             startNextQueuedRun();
@@ -665,27 +657,19 @@ const store = class Store implements Store {
                 },
             };
 
-            if (effectController.signal.aborted) {
+            const abort = (): void => {
                 controller.abort();
-            } else {
-                const abort = (): void => {
-                    controller.abort();
-                };
+            };
 
-                effectController.signal.addEventListener('abort', abort, { once: true });
-                run.removeLifetimeAbort = () => {
-                    effectController.signal.removeEventListener('abort', abort);
-                };
-            }
+            effectController.signal.addEventListener('abort', abort, { once: true });
+            run.removeLifetimeAbort = () => {
+                effectController.signal.removeEventListener('abort', abort);
+            };
 
             return run;
         };
 
         const cancelPendingRun = (run: EffectRun): void => {
-            if (run.state !== 'pending-async') {
-                return;
-            }
-
             if (!run.signal.aborted) {
                 run.controller.abort();
             }
@@ -695,11 +679,11 @@ const store = class Store implements Store {
         };
 
         const startRun = (): void => {
+            clearCommittedRun();
+
             if (canceled) {
                 return;
             }
-
-            clearCommittedRun();
 
             const run = createRun();
             activeRuns.add(run);

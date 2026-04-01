@@ -4,8 +4,10 @@ export default defineConfig({
     test: {
         reporters: process.env.GITHUB_ACTIONS ? ['dot', 'github-actions'] : ['default'],
         coverage: {
+            provider: 'v8',
             include: ['src/**/*.ts'],
             exclude: ['**/*.test.ts'],
+            reporter: ['text', 'html', 'lcov'],
         },
     },
 });

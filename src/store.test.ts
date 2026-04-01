@@ -181,11 +181,13 @@ describe('DefaultInvalidationQueue', () => {
 describe('effect()', () => {
     let signal: SignalConstructor;
     let effect: EffectConstructor;
+    let batch: BatchFunction;
 
     beforeEach(() => {
         const store = createStore();
         signal = store.signal;
         effect = store.effect;
+        batch = store.batch;
     });
 
     const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -363,6 +365,67 @@ describe('effect()', () => {
         expect(cleanup).toBeCalledTimes(1);
     });
 
+    it('Skips scheduled reruns for effects that are canceled earlier in the same flush.', () => {
+        const [get, set] = signal(0);
+        const controller = new AbortController();
+        const firstRuns: number[] = [];
+        const secondRuns: number[] = [];
+
+        effect(() => {
+            const value = get();
+            firstRuns.push(value);
+
+            if (value === 1) {
+                controller.abort();
+            }
+        });
+
+        effect(
+            () => {
+                secondRuns.push(get());
+            },
+            { signal: controller.signal },
+        );
+
+        set(1);
+
+        expect(firstRuns).toEqual([0, 1]);
+        expect(secondRuns).toEqual([0]);
+    });
+
+    it('Does not rerun effects that were invalidated before being canceled.', () => {
+        const [get, set] = signal(0);
+        const runs: number[] = [];
+
+        const cancel = effect(() => {
+            runs.push(get());
+        });
+
+        batch(() => {
+            set(1);
+            cancel();
+        });
+
+        expect(runs).toEqual([0]);
+    });
+
+    it('Does not rerun effects when cleanup cancels the effect.', () => {
+        const [get, set] = signal(0);
+        const runs: number[] = [];
+
+        effect(({ cancel }) => {
+            runs.push(get());
+
+            return () => {
+                cancel();
+            };
+        });
+
+        set(1);
+
+        expect(runs).toEqual([0]);
+    });
+
     it('Does not run the effect if the AbortSignal is already aborted.', () => {
         const [get, set] = signal(0);
 
@@ -513,6 +576,27 @@ describe('effect()', () => {
 
         expect(cleanup).toBeCalledTimes(1);
 
+        pending.resolve();
+        await flushPromises();
+
+        expect(cleanup).toBeCalledTimes(1);
+    });
+
+    it('Runs async cleanup callbacks immediately if they are registered after cancellation.', async () => {
+        const [get, set] = signal(0);
+        const pending = deferred<void>();
+        const cleanup = vi.fn();
+
+        effect(async ({ onCleanup }) => {
+            const value = get();
+
+            if (value === 0) {
+                await pending.promise;
+                onCleanup(cleanup);
+            }
+        });
+
+        set(1);
         pending.resolve();
         await flushPromises();
 
@@ -672,6 +756,44 @@ describe('effect()', () => {
         await flushPromises();
     });
 
+    it('Clears queued invalidations when a queued async effect is canceled.', async () => {
+        const [get, set] = signal(0);
+        const pending = deferred<void>();
+        const queue = {
+            enqueue: vi.fn((item: AsyncInvalidation) => items.push(item)),
+            dequeue: vi.fn(() => items.shift()),
+            clear: vi.fn(() => {
+                items.length = 0;
+            }),
+            get size() {
+                return items.length;
+            },
+        } satisfies InvalidationQueue<AsyncInvalidation>;
+        const items: AsyncInvalidation[] = [];
+        const runs: number[] = [];
+
+        const cancel = effect(
+            async () => {
+                runs.push(get());
+                await pending.promise;
+            },
+            { concurrency: 'queue', queue },
+        );
+
+        set(1);
+        set(2);
+        cancel();
+
+        expect(queue.enqueue).toBeCalledTimes(2);
+        expect(queue.clear).toBeCalledTimes(1);
+        expect(queue.size).toBe(0);
+
+        pending.resolve();
+        await flushPromises();
+
+        expect(runs).toEqual([0]);
+    });
+
     it('Reports async errors and keeps the effect active by default.', async () => {
         const [get, set] = signal(0);
         const handler = vi.fn();
@@ -697,6 +819,34 @@ describe('effect()', () => {
             concurrency: 'cancel',
             canceled: false,
         });
+
+        set(1);
+        await flushPromises();
+
+        expect(runs).toEqual([0, 1]);
+    });
+
+    it('Reports async errors to console.error by default when no handler is provided.', async () => {
+        const [get, set] = signal(0);
+        const runs: number[] = [];
+
+        consoleErrorMock.mockClear();
+
+        effect(async () => {
+            const value = get();
+            runs.push(value);
+
+            if (value === 0) {
+                throw new Error('boom');
+            }
+        });
+
+        await flushPromises();
+
+        expect(consoleErrorMock).toBeCalledTimes(1);
+        expect(consoleErrorMock.mock.calls[0]?.[0]).toBe('Error in async effect:');
+        expect(consoleErrorMock.mock.calls[0]?.[1]).toBeInstanceOf(Error);
+        expect((consoleErrorMock.mock.calls[0]?.[1] as Error | undefined)?.message).toBe('boom');
 
         set(1);
         await flushPromises();
