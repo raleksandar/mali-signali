@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+## [1.4.0] - 2026-04-02
 ### Added
 - `EffectContext.track()` - Explicitly tracks signal and memo readers in async effects after the first `await`.
 - `resource()` - Async derived state with loading/ready/error states, stale-value retention, `refresh()`, `abort()`, `reset()`, and guarded writes.
@@ -47,7 +49,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/raleksandar/mali-signali/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/raleksandar/mali-signali/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/raleksandar/mali-signali/releases/tag/v1.4.0
 [1.3.1]: https://github.com/raleksandar/mali-signali/releases/tag/v1.3.1
 [1.3.0]: https://github.com/raleksandar/mali-signali/releases/tag/v1.3.0
 [1.2.0]: https://github.com/raleksandar/mali-signali/releases/tag/v1.2.0
