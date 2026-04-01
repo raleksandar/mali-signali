@@ -272,6 +272,27 @@ describe('effect()', () => {
         expect(fx).toBeCalledTimes(2);
     });
 
+    it('Only calls the cleanup function once when the effect is canceled repeatedly.', () => {
+        const cleanup = vi.fn();
+        const cancel = effect(() => cleanup);
+
+        cancel();
+        cancel();
+
+        expect(cleanup).toBeCalledTimes(1);
+    });
+
+    it('Only calls the cleanup function once when canceling before aborting the signal.', () => {
+        const controller = new AbortController();
+        const cleanup = vi.fn();
+        const cancel = effect(() => cleanup, { signal: controller.signal });
+
+        cancel();
+        controller.abort();
+
+        expect(cleanup).toBeCalledTimes(1);
+    });
+
     it('Does not run the effect if the AbortSignal is already aborted.', () => {
         const [get, set] = signal(0);
 

@@ -327,9 +327,12 @@ const store = class Store implements Store {
             dependencies.clear();
             this.#activeEffects.delete(fx);
 
-            if (onCleanup) {
+            const cleanup = onCleanup;
+            onCleanup = undefined;
+
+            if (cleanup) {
                 try {
-                    onCleanup();
+                    cleanup();
                 } catch (error) {
                     console.error('Error during effect cleanup:', error);
                 }
