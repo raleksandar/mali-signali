@@ -80,8 +80,11 @@ export interface EffectContext {
 
 /**
  * The effect function.
+ *
+ * It may optionally return a cleanup callback that is executed before the
+ * effect is re-run or canceled.
  */
-export type EffectFunction = (context: EffectContext) => void;
+export type EffectFunction = (context: EffectContext) => void | (() => void);
 
 /**
  * Creates and executes a new effect.

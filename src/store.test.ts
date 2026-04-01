@@ -5,6 +5,7 @@ import {
     type BatchFunction,
     type EffectConstructor,
     type EffectContext,
+    type EffectFunction,
     type MemoConstructor,
     type SignalConstructor,
     type SignalReader,
@@ -140,6 +141,12 @@ describe('effect()', () => {
 
     afterAll(() => {
         consoleErrorMock.mockReset();
+    });
+
+    it('Allows effect functions to return cleanup callbacks in the public types.', () => {
+        expectTypeOf<EffectFunction>().toEqualTypeOf<
+            (context: EffectContext) => void | (() => void)
+        >();
     });
 
     it('Creates a new effect.', () => {
