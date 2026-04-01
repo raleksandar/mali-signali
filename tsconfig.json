@@ -1,5 +1,6 @@
 {
   "include": ["src/**/*.ts"],
+  "exclude": ["package/**"],
   "compilerOptions": {
     "target": "ESNext",
     "lib": ["ESNext", "DOM"],

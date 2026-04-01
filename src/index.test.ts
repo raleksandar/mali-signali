@@ -59,7 +59,7 @@ describe('public API', () => {
 
     it('should allow async effects through the public API types', async () => {
         expectTypeOf<AsyncEffectFunction>().toBeFunction();
-        expectTypeOf<AsyncEffectOptions>().toMatchTypeOf<{
+        expectTypeOf<AsyncEffectOptions>().toExtend<{
             concurrency?: 'cancel' | 'concurrent' | 'queue';
         }>();
 
@@ -124,7 +124,7 @@ describe('public API', () => {
 
         expect(read().status).toBe('loading');
         expect(controls.refresh).toBeInstanceOf(Function);
-        expect(controls.cancel).toBeInstanceOf(Function);
+        expect(controls.abort).toBeInstanceOf(Function);
         expect(controls.reset).toBeInstanceOf(Function);
     });
 
@@ -143,7 +143,7 @@ describe('public API', () => {
         api.effect(fx);
 
         expect(value).toBe(42);
-        expect(fx).toBeCalledTimes(1);
+        expect(fx).toHaveBeenCalledTimes(1);
 
         api.batch(() => {
             set(43);
@@ -151,6 +151,6 @@ describe('public API', () => {
         });
 
         expect(value).toBe(44);
-        expect(fx).toBeCalledTimes(2);
+        expect(fx).toHaveBeenCalledTimes(2);
     });
 });

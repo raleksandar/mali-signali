@@ -1,0 +1,29 @@
+import type { StoreState } from '../store/internal';
+
+export function deferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+
+    return { promise, resolve, reject };
+}
+
+export async function flushPromises(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+}
+
+export function createTestState(): StoreState {
+    return {
+        batchLevel: 0,
+        isUpdating: false,
+        isTracking: false,
+        pendingEffects: new Set(),
+        runs: [],
+        activeEffects: new Set(),
+    };
+}
