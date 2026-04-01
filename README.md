@@ -1,329 +1,113 @@
 # `mali-signali`
 
-This package provides a lightweight, framework-agnostic TypeScript library for reactive state management.
+`mali-signali` is a lightweight, framework-agnostic TypeScript library for fine-grained reactive state.
 
-## Signals
+It provides:
+- signals for mutable state
+- memos for derived state
+- effects for reactive side effects
+- resources for async derived state
+- stores for isolated reactive graphs
 
-Signals are the basic units of state. They hold a value and are represented as a tuple of `read()` and `update()` functions. 
+## Installation
+
+```sh
+pnpm add mali-signali
+```
 
 ```ts
-import { signal } from 'mali-signali';
+import { batch, effect, memo, resource, signal, untracked } from 'mali-signali';
+```
+
+## Quick Start
+
+```ts
+import { effect, memo, signal } from 'mali-signali';
 
 const [count, setCount] = signal(0);
+const doubleCount = memo(() => count() * 2);
 
-console.log(count()); // 0
+effect(() => {
+  console.log(`${count()} x 2 = ${doubleCount()}`);
+});
 
 setCount(1);
-
-console.log(count()); // 1
+setCount(2);
 ```
 
-As a convenience, the `signal()` function actually returns an instance of Array subclass with 
-`read()` and `update()` methods, so it can be passed around as a single object.
+## Async Example
 
 ```ts
-const count = signal(0);
+import { effect, resource, signal } from 'mali-signali';
 
-console.log(count.read()); // 0
+type Wallet = { id: string; balance: number };
 
-count.update(1);
+const walletId = signal('wallet-1');
 
-console.log(count.read()); // 1
-```
-
-## Memos
-
-Memos are derived (a.k.a. computed) signals. They are created by passing a function that computes the value of the memo based on the values of other signals.
-
-They are read-only and are updated automatically when the signals they depend on change.
-
-The memo's compute function MUST be idempotent (i.e., it must not have side effects and must always return the same result for the same values of signals it depends on).
-
-```ts
-import { signal, memo } from 'mali-signali';
-
-const [count, setCount] = signal(0);
-const doubleCount = memo(() => count() * 2);
-
-console.log(count()); // 0
-console.log(doubleCount()); // 0
-
-setCount(6);
-
-console.log(count()); // 6
-console.log(doubleCount()); // 12
-```
-
-## Effects
-
-Effects are functions that are re-run whenever the signals (or memos) they depend on change. They are what makes the state management reactive.
-
-```ts
-import { signal, memo, effect } from 'mali-signali';
-
-const [count, setCount] = signal(0);
-const doubleCount = memo(() => count() * 2);
-
-effect(() => {
-  // simply reading a signal within the effect creates a dependency
-  // and causes the effect to be executed whenever that signal changes
-  console.log('doubleCount:', doubleCount());
-});
-
-// console logs 'doubleCount: 0'
-
-setCount(6); // console logs 'doubleCount: 12'
-setCount(10); // console logs 'doubleCount: 20'
-```
-
-Effect functions can return a cleanup function that is called before the effect is called again. This can be used to clean up resources or cancel subscriptions.
-
-```ts
-import { signal, effect } from 'mali-signali';
-
-const [count, setCount] = signal(0);
-
-effect(() => {
-  console.log('count:', count());
-
-  const id = setInterval(() => {
-    setCount(count() + 1);
-  }, 1000);
-
-  return () => {
-    // without clearing the interval, after each update a new timer
-    // would be created, causing the count to increase exponentially
-    clearInterval(id);
-  };
-});
-```
-
-Effects can also be asynchronous. Signal reads are tracked only until the first `await`, so any reads after that point are intentionally untracked unless they are wrapped in `context.track()`.
-
-```ts
-import { signal, effect } from 'mali-signali';
-
-const walletId = signal('');
-const wallet = signal<Wallet | null>(null);
-
-effect(async ({ signal, onCleanup }) => {
+const [wallet] = resource<Wallet>(async ({ signal }) => {
   const id = walletId.read();
-  if (!id) {
-    wallet.update(null);
-    return;
-  }
-
-  const response = await fetch(`/api/wallets/${id}`, { signal });
-  const parsedWallet = await response.json();
-
-  onCleanup(() => {
-    wallet.update(null);
-  });
-
-  wallet.update(parsedWallet);
-});
-```
-
-If you need to add dependencies after the first `await`, call `track()` explicitly for each signal or memo reader you want to subscribe to:
-
-```ts
-effect(async ({ track }) => {
-  await Promise.resolve();
-
-  const a = track(signalA);
-  const b = track(signalB);
-
-  console.log(a, b);
-});
-```
-
-Async effects use `context.onCleanup()` instead of returning cleanup callbacks. When an async effect is invalidated while still pending, the default behavior is to cancel the stale run and re-run once after it settles. This can be customized with the `concurrency` option:
-
-```ts
-effect(async () => {
-  // ...
-}, {
-  concurrency: 'queue',
-});
-```
-
-When `concurrency` is set to `'queue'`, the built-in FIFO queue is backed by a simple array. It is also exposed as `DefaultInvalidationQueue` for cases where you want to construct and reuse the same queue instance explicitly:
-
-```ts
-import { effect, DefaultInvalidationQueue } from 'mali-signali';
-
-const queue = new DefaultInvalidationQueue();
-
-effect(async () => {
-  // ...
-}, {
-  concurrency: 'queue',
-  queue,
-});
-```
-
-The `effect()` function itself returns a callback which, when called, cancels the effect (i.e. removes that effect from dependencies of referenced signals).
-
-```ts
-import { signal, effect } from 'mali-signali';
-
-const [count, setCount] = signal(0);
-
-const cancel = effect(() => {
-  console.log('count:', count());
-});
-
-// console logs 'count: 0'
-
-setCount(1); // console logs 'count: 1'
-setCount(2); // console logs 'count: 2'
-
-cancel();
-
-setCount(3); // nothing happens
-```
-
-In addition to canceling via the returned function, effects can be canceled via an instance of `AbortSignal`.
-
-```ts
-import { signal, effect } from 'mali-signali';
-
-const [a, setA] = signal(1);
-const [b, setB] = signal(2);
-
-const abortController = new AbortController();
-
-effect(() => { console.log(a()); }, { signal: abortController.signal }); // logs '1'
-effect(() => { console.log(b()); }, { signal: abortController.signal }); // logs '2'
-
-setA(3); // logs '3'
-setB(4); // logs '4'
-
-abortController.abort();
-
-setA(5); // nothing happens
-setB(6); // nothing happens
-```
-
-Canceling an effect from within the effect itself can be done via `AbortSignal` as explained above,
-or via the `cancel()` function of an `EffectContext` object passed to the effect function.
-
-```ts
-import { signal, effect } from 'mali-signali';
-
-const [get, set] = signal(1);
-
-effect(({ cancel }) => {
-  const value = get();
-  console.log(value);
-  if (value === 73) {
-    cancel();
-  }
-});
-
-set(42); // logs '42'
-set(73); // logs '73'
-set(0); // nothing happens
-set(1); // nothing happens
-```
-
-## Resources
-
-Resources are asynchronous derived values. They wrap a loader function and expose a reader for the current async state together with imperative controls.
-
-```ts
-import { resource, signal } from 'mali-signali';
-
-const walletId = signal('');
-
-const [wallet, { refresh, reset }] = resource<Wallet>(async ({ track, signal, previous, cause }) => {
-  const id = track(walletId);
-
   const response = await fetch(`/api/wallets/${id}`, { signal });
   return response.json();
 });
 
-const state = wallet();
-
-if (state.status === 'loading' && state.isStale) {
-  // a previous value is being refreshed in the background
-}
-
-void previous;
-void cause;
-void refresh;
-void reset;
-```
-
-Resources keep the previous value while refreshing and expose it via `isStale`. By default, only the latest accepted async run may commit its result, which helps guard against out-of-order async writes such as overlapping `fetch()` calls.
-
-
-## Untracked reads
-
-For cases where you need to read the value of a signal without tracking it as a dependency, you can call the reader function via `untracked()`.
-
-```ts
-import { signal, effect, untracked } from 'mali-signali';
-
-const [a, setA] = signal(1);
-const [b, setB] = signal(2);
-
 effect(() => {
-  setA(untracked(a) + b());  // effect reads but does not depend on 'a'
-});
+  const state = wallet();
 
-setB(3);
-console.log(a()); // 6
+  if (state.status === 'loading') {
+    console.log('Loading wallet...');
+  }
+
+  if (state.status === 'ready') {
+    console.log(state.value.balance);
+  }
+});
 ```
 
-## Batching
+## Core Concepts
 
-The `batch()` function can be used to batch updates to signals. This can be useful when multiple signals are updated in quick succession, as it prevents unnecessary re-runs of effects.
+### Signals
 
-```ts
-import { signal, effect, batch } from 'mali-signali';
+Signals are mutable reactive values. Reading a signal inside an effect or memo creates a dependency. Updating it re-runs the dependents that use it.
 
-const [a, setA] = signal(1);
-const [b, setB] = signal(2);
-const sum = memo(() => a() + b());
+API reference: [`docs/api/signals.md`](./docs/api/signals.md)
 
-effect(() => {
-  console.log(a(), '+', b(), '=', sum());
-});
+### Memos
 
-// console logs '1 + 2 = 3'
+Memos are derived read-only signals. They recompute automatically when their dependencies change and are best used for idempotent derived values.
 
-setA(3); // console logs '3 + 2 = 5'
-setA(4); // console logs '4 + 2 = 6'
-setB(5); // console logs '4 + 5 = 9'
+API reference: [`docs/api/memos.md`](./docs/api/memos.md)
 
-batch(() => {
-  setA(6);  // no logs
-  setB(7);  // no logs
-  setB(8);  // no logs
-});
+### Effects
 
-// console logs '6 + 8 = 14'
-```
+Effects react to signal, memo, and resource changes. They support cleanup callbacks, cancellation, async execution, post-`await` manual dependency tracking via `track()`, and configurable async concurrency behavior.
 
-## Store
+API reference: [`docs/api/effects.md`](./docs/api/effects.md)
 
-The `createStore()` function can be used to create an independent store that holds a collection of signals, memos, and effects. It provides a way to use same instance of library in multiple places without interfering with each other.
+### Resources
 
-The signals, memos, and effects from one store are isolated from those of another store and MUST NOT be used interchangeably between stores.
+Resources model async derived state. They expose loading, ready, and error states, keep stale values while refreshing, and provide imperative controls such as `refresh()`, `cancel()`, and `reset()`.
 
-The `createStore()` returns an object with `signal()`, `memo()`, `resource()`, `effect()`, `batch()`, `untracked()`, and `unlink()` methods that work the same way as the global functions, but operate on the store they were created with.
+API reference: [`docs/api/resources.md`](./docs/api/resources.md)
 
-The global functions `signal()`, `memo()`, `resource()`, `effect()`, and `batch()` are simply shortcuts for the default library-global store.
+### Stores
 
-The `unlink()` method of a `Store` instance can be used to unlink (cancel) all effects and memos in the store. This should be used as a cleanup mechanism when the store is no longer needed.
+Stores isolate reactive graphs. The global APIs are convenience wrappers around a default global store, while `createStore()` lets you construct independent stores explicitly.
+
+API reference: [`docs/api/store.md`](./docs/api/store.md)
+
+### Utilities
+
+The shared runtime utilities cover batching, untracked reads, and queue primitives used by async effects and resources.
+
+API reference: [`docs/api/utilities.md`](./docs/api/utilities.md)
+
+For the full API documentation landing page, see [`docs/api/README.md`](./docs/api/README.md).
 
 ## License
 
 MIT
 
+## See Also
 
-## See also
-
- - [Solid.js](https://github.com/solidjs/solid)
- - [Preact Signals](https://github.com/preactjs/signals)
+- [Solid.js](https://github.com/solidjs/solid)
+- [Preact Signals](https://github.com/preactjs/signals)
