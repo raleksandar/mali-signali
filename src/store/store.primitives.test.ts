@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { equalFunc } from '../equal';
+import { deferred, flushPromises } from '../test/store-test-helpers';
 import {
     createStore,
     type BatchFunction,
@@ -512,5 +513,63 @@ describe('unlink()', () => {
 
         expect(bValue).toBe(2000);
         expect(fx2).toHaveBeenCalledTimes(3);
+    });
+
+    it('Aborts in-flight async effects and prevents reruns after unlink.', async () => {
+        const store = createStore();
+        const [get, set] = store.signal(0);
+        const pending = deferred<void>();
+        const signals: AbortSignal[] = [];
+        const runs: number[] = [];
+
+        store.effect(async ({ signal }) => {
+            const value = get();
+            runs.push(value);
+            signals.push(signal);
+            await pending.promise;
+        });
+
+        expect(runs).toEqual([0]);
+        expect(signals[0]?.aborted).toBe(false);
+
+        await store.unlink();
+
+        expect(signals[0]?.aborted).toBe(true);
+
+        pending.resolve();
+        await flushPromises();
+
+        set(1);
+        await flushPromises();
+
+        expect(runs).toEqual([0]);
+    });
+
+    it('Aborts multiple in-flight async effects on unlink.', async () => {
+        const store = createStore();
+        const first = deferred<void>();
+        const second = deferred<void>();
+        const signals: AbortSignal[] = [];
+
+        store.effect(async ({ signal }) => {
+            signals.push(signal);
+            await first.promise;
+        });
+
+        store.effect(async ({ signal }) => {
+            signals.push(signal);
+            await second.promise;
+        });
+
+        expect(signals).toHaveLength(2);
+        expect(signals.every((s) => !s.aborted)).toBe(true);
+
+        await store.unlink();
+
+        expect(signals.every((s) => s.aborted)).toBe(true);
+
+        first.resolve();
+        second.resolve();
+        await flushPromises();
     });
 });
