@@ -71,7 +71,7 @@ export function createEffect(
                 } as EffectContext & AsyncEffectContext);
             },
             handleSyncResult(run, result): boolean {
-                if (result instanceof Function) {
+                if (typeof result === 'function') {
                     run.cleanups.add(result);
                 }
 
