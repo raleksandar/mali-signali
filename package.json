@@ -61,7 +61,6 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
     "@eslint/js": "10.0.1",
-    "@types/eslint__js": "9.14.0",
     "@types/node": "25.5.0",
     "@vitest/coverage-v8": "4.1.2",
     "clean-publish": "6.0.5",
@@ -77,5 +76,5 @@
     "vite": "8.0.3",
     "vitest": "4.1.2"
   },
-  "packageManager": "pnpm@10.15.1"
+  "packageManager": "pnpm@10.33.0"
 }
