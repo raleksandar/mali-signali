@@ -600,11 +600,8 @@ const store = class Store implements Store {
             }
 
             if (run.state === 'canceled') {
-                if (pendingRerun) {
-                    pendingRerun = false;
-                    startRun();
-                }
-
+                pendingRerun = false;
+                startRun();
                 return;
             }
 
@@ -670,10 +667,7 @@ const store = class Store implements Store {
         };
 
         const cancelPendingRun = (run: EffectRun): void => {
-            if (!run.signal.aborted) {
-                run.controller.abort();
-            }
-
+            run.controller.abort();
             run.state = 'canceled';
             cleanupRun(run);
         };

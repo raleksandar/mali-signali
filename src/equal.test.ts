@@ -329,6 +329,29 @@ describe('equal()', () => {
         expect(equal(a, b)).toBe(false);
     });
 
+    it('Returns false for repeated shared references.', () => {
+        const sharedA = { foo: 1 };
+        const sharedB = { foo: 1 };
+
+        expect(
+            equal(
+                { left: sharedA, right: sharedA },
+                { left: sharedB, right: sharedB },
+            ),
+        ).toBe(false);
+    });
+
+    it('Returns true when the same left-hand object is compared to distinct but equal right-hand objects.', () => {
+        const shared = { foo: 1 };
+
+        expect(
+            equal(
+                { left: shared, right: shared },
+                { left: { foo: 1 }, right: { foo: 1 } },
+            ),
+        ).toBe(true);
+    });
+
     it('Returns true for two Map objects with structurally equal object keys.', () => {
         expect(
             equal(

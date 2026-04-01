@@ -438,7 +438,7 @@ describe('effect()', () => {
 
         controller.abort();
 
-        effect(fx, { signal: controller.signal });
+        const cancel = effect(fx, { signal: controller.signal });
 
         expect(value).toBe(-1);
         expect(fx).toBeCalledTimes(0);
@@ -447,6 +447,11 @@ describe('effect()', () => {
 
         expect(value).toBe(-1);
         expect(fx).toBeCalledTimes(0);
+
+        expect(cancel).toBeInstanceOf(Function);
+        expect(() => {
+            cancel();
+        }).not.toThrow();
     });
 
     it('Cancels the effect when context.cancel() is called within the effect', () => {
@@ -580,6 +585,25 @@ describe('effect()', () => {
         await flushPromises();
 
         expect(cleanup).toBeCalledTimes(1);
+    });
+
+    it('Does not rerun async effects after they are explicitly canceled while pending.', async () => {
+        const [get, set] = signal(0);
+        const pending = deferred<void>();
+        const runs: number[] = [];
+
+        const cancel = effect(async () => {
+            runs.push(get());
+            await pending.promise;
+        });
+
+        set(1);
+        cancel();
+        pending.resolve();
+
+        await flushPromises();
+
+        expect(runs).toEqual([0]);
     });
 
     it('Runs async cleanup callbacks immediately if they are registered after cancellation.', async () => {
@@ -1071,6 +1095,30 @@ describe('batch()', () => {
             set(1);
             set(2);
             set(3);
+        });
+
+        expect(fx).toBeCalledTimes(2);
+    });
+
+    it('Defers flushing until the outermost nested batch completes.', () => {
+        const [get, set] = signal(0);
+
+        const fx = vi.fn(() => {
+            get();
+        });
+
+        effect(fx);
+
+        expect(fx).toBeCalledTimes(1);
+
+        batch(() => {
+            set(1);
+
+            batch(() => {
+                set(2);
+            });
+
+            expect(fx).toBeCalledTimes(1);
         });
 
         expect(fx).toBeCalledTimes(2);
