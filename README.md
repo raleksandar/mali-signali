@@ -98,6 +98,57 @@ effect(() => {
 });
 ```
 
+Effects can also be asynchronous. Signal reads are tracked only until the first `await`, so any reads after that point are intentionally untracked.
+
+```ts
+import { signal, effect } from 'mali-signali';
+
+const walletId = signal('');
+const wallet = signal<Wallet | null>(null);
+
+effect(async ({ signal, onCleanup }) => {
+  const id = walletId.read();
+  if (!id) {
+    wallet.update(null);
+    return;
+  }
+
+  const response = await fetch(`/api/wallets/${id}`, { signal });
+  const parsedWallet = await response.json();
+
+  onCleanup(() => {
+    wallet.update(null);
+  });
+
+  wallet.update(parsedWallet);
+});
+```
+
+Async effects use `context.onCleanup()` instead of returning cleanup callbacks. When an async effect is invalidated while still pending, the default behavior is to cancel the stale run and re-run once after it settles. This can be customized with the `concurrency` option:
+
+```ts
+effect(async () => {
+  // ...
+}, {
+  concurrency: 'queue',
+});
+```
+
+When `concurrency` is set to `'queue'`, the built-in FIFO queue is backed by a simple array. It is also exposed as `DefaultInvalidationQueue` for cases where you want to construct and reuse the same queue instance explicitly:
+
+```ts
+import { effect, DefaultInvalidationQueue } from 'mali-signali';
+
+const queue = new DefaultInvalidationQueue();
+
+effect(async () => {
+  // ...
+}, {
+  concurrency: 'queue',
+  queue,
+});
+```
+
 The `effect()` function itself returns a callback which, when called, cancels the effect (i.e. removes that effect from dependencies of referenced signals).
 
 ```ts

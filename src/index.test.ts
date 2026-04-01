@@ -1,6 +1,8 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import * as api from './index';
 import type {
+    AsyncEffectFunction,
+    AsyncEffectOptions,
     BatchFunction,
     EffectConstructor,
     MemoConstructor,
@@ -51,6 +53,35 @@ describe('public API', () => {
         });
         expect(value).toBe(43);
         cleanup();
+    });
+
+    it('should allow async effects through the public API types', async () => {
+        expectTypeOf<AsyncEffectFunction>().toBeFunction();
+        expectTypeOf<AsyncEffectOptions>().toMatchTypeOf<{
+            concurrency?: 'cancel' | 'concurrent' | 'queue';
+        }>();
+
+        const cleanup = api.effect(
+            async ({ signal, onCleanup }) => {
+                void signal.aborted;
+                onCleanup(() => {});
+                await Promise.resolve();
+            },
+            { concurrency: 'cancel' },
+        );
+
+        expectTypeOf(cleanup).toEqualTypeOf<() => void>();
+        cleanup();
+    });
+
+    it('should expose the default async effect queue', () => {
+        const queue = new api.DefaultInvalidationQueue<number>();
+
+        queue.enqueue(1);
+        queue.enqueue(2);
+
+        expect(queue.dequeue()).toBe(1);
+        expect(queue.dequeue()).toBe(2);
     });
 
     it('should expose the untracked() function', async () => {

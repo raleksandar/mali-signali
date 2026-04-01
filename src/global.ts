@@ -1,4 +1,6 @@
 import {
+    type AsyncEffectFunction,
+    type AsyncEffectOptions,
     createStore,
     type EffectFunction,
     type EffectOptions,
@@ -51,8 +53,13 @@ export function untracked<T>(read: SignalReader<T>): T {
  * @param options Optional parameters for customizing the behavior.
  * @returns A cleanup function.
  */
-export function effect(execute: EffectFunction, options?: EffectOptions): () => void {
-    return globalStore.effect(execute, options);
+export function effect(execute: EffectFunction, options?: EffectOptions): () => void;
+export function effect(execute: AsyncEffectFunction, options?: AsyncEffectOptions): () => void;
+export function effect(
+    execute: EffectFunction | AsyncEffectFunction,
+    options?: EffectOptions | AsyncEffectOptions,
+): () => void {
+    return globalStore.effect(execute as AsyncEffectFunction, options as AsyncEffectOptions);
 }
 
 /**
