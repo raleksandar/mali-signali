@@ -819,4 +819,37 @@ describe('resource()', () => {
             isStale: false,
         });
     });
+
+    it('Does not report isStale when T is undefined and the resource refreshes.', async () => {
+        // getLoadingState checks previous.value !== undefined, so a resource
+        // that legitimately resolves to undefined cannot detect staleness.
+        const [read, controls] = resource<undefined>(async () => undefined);
+
+        await flushPromises();
+
+        expect(read()).toEqual({
+            status: 'ready',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+
+        controls.refresh();
+
+        expect(read()).toEqual({
+            status: 'loading',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+
+        await flushPromises();
+
+        expect(read()).toEqual({
+            status: 'ready',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+    });
 });

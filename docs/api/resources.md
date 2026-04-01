@@ -345,6 +345,7 @@ These behave the same way as in [`effects.md`](./effects.md), except resource co
 - Cycles created by tracked dependency invalidations are detected and surface as `Cyclic dependency detected` through the normal resource error path.
 - If you use `concurrency: 'concurrent'`, stale writes are prevented only when `writes` is `'latest'`.
 - `reset()` returns the resource to `idle`; the next run, if any, will usually be caused by a dependency change or a manual `refresh()`.
+- When `T` is `undefined`, the resource cannot distinguish between "never loaded" and "loaded with undefined" for staleness purposes. During a refresh, `isStale` will be `false` even though the resource has previously resolved. If your loader can legitimately return `undefined`, consider wrapping it (e.g., `{ data: T | undefined }`) to preserve staleness tracking.
 
 ## Additional Examples
 
