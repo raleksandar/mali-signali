@@ -1,6 +1,7 @@
 import { createEffect } from './effect';
 import { flushPendingEffects } from './flush';
 import type { StoreState } from './internal';
+import { createResource } from './resource';
 import { createSignal, readUntracked } from './signal';
 import type {
     AsyncEffectFunction,
@@ -9,6 +10,9 @@ import type {
     EffectFunction,
     EffectOptions,
     MemoConstructor,
+    ResourceConstructor,
+    ResourceContext,
+    ResourceOptions,
     SignalOptions,
     SignalReader,
     Store,
@@ -49,6 +53,13 @@ class StoreImpl implements Store {
         createEffect(this.#state, () => write(compute()), { ...options, isMemo: true });
 
         return read;
+    };
+
+    public resource: ResourceConstructor = <T, E = unknown>(
+        load: (context: ResourceContext<T, E>) => Promise<T>,
+        options?: ResourceOptions,
+    ) => {
+        return createResource<T, E>(this.#state, load, options);
     };
 
     public batch = (execute: () => void): void => {

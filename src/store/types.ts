@@ -224,6 +224,37 @@ export type MemoConstructor = <T>(
     options?: SignalOptions & EffectOptions,
 ) => SignalReader<T>;
 
+export type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export type ResourceState<T, E = unknown> =
+    | { status: 'idle'; value: undefined; error: undefined; isStale: false }
+    | { status: 'loading'; value: undefined; error: undefined; isStale: false }
+    | { status: 'loading'; value: T; error: undefined; isStale: true }
+    | { status: 'ready'; value: T; error: undefined; isStale: false }
+    | { status: 'error'; value: T | undefined; error: E; isStale: boolean };
+
+export type RunCause = 'init' | 'dependency' | 'refresh';
+
+export interface ResourceControls {
+    refresh(): void;
+    abort(): void;
+    reset(): void;
+}
+
+export interface ResourceContext<T, E = unknown> extends EffectContext, ResourceControls {
+    readonly previous: ResourceState<T, E>;
+    readonly cause: RunCause;
+}
+
+export interface ResourceOptions extends AsyncEffectOptions {
+    readonly writes?: 'latest' | 'settled';
+}
+
+export type ResourceConstructor = <T, E = unknown>(
+    load: (context: ResourceContext<T, E>) => Promise<T>,
+    options?: ResourceOptions,
+) => readonly [read: SignalReader<ResourceState<T, E>>, controls: ResourceControls];
+
 /**
  * Executes a batch of updates.
  *
@@ -288,6 +319,18 @@ export interface Store {
      * @returns A getter function.
      */
     readonly memo: MemoConstructor;
+
+    /**
+     * Creates a new asynchronous derived resource.
+     *
+     * A resource manages async loading state, the latest resolved value,
+     * stale-while-revalidate updates, and loader errors.
+     *
+     * @param load The async loader function.
+     * @param options Optional parameters for customizing scheduling and writes.
+     * @returns A state reader and resource controls.
+     */
+    readonly resource: ResourceConstructor;
 
     /**
      * Executes a batch of updates.

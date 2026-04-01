@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 ### Added
 - `EffectContext.track()` - Explicitly tracks signal and memo readers in async effects after the first `await`.
+- `resource()` - Async derived state with loading/ready/error states, stale-value retention, `refresh()`, `abort()`, `reset()`, and guarded writes.
+
+### Changed
+- `ResourceContext` now extends `ResourceControls`, and resource loaders expose `refresh()`, `abort()`, and `reset()` in addition to async effect-style `cancel()`.
 
 ## [1.3.1] - 2026-04-01
 ### Fixed

@@ -227,6 +227,36 @@ set(0); // nothing happens
 set(1); // nothing happens
 ```
 
+## Resources
+
+Resources are asynchronous derived values. They wrap a loader function and expose a reader for the current async state together with imperative controls.
+
+```ts
+import { resource, signal } from 'mali-signali';
+
+const walletId = signal('');
+
+const [wallet, { refresh, reset }] = resource<Wallet>(async ({ track, signal, previous, cause }) => {
+  const id = track(walletId);
+
+  const response = await fetch(`/api/wallets/${id}`, { signal });
+  return response.json();
+});
+
+const state = wallet();
+
+if (state.status === 'loading' && state.isStale) {
+  // a previous value is being refreshed in the background
+}
+
+void previous;
+void cause;
+void refresh;
+void reset;
+```
+
+Resources keep the previous value while refreshing and expose it via `isStale`. By default, only the latest accepted async run may commit its result, which helps guard against out-of-order async writes such as overlapping `fetch()` calls.
+
 
 ## Untracked reads
 
@@ -282,9 +312,9 @@ The `createStore()` function can be used to create an independent store that hol
 
 The signals, memos, and effects from one store are isolated from those of another store and MUST NOT be used interchangeably between stores.
 
-The `createStore()` returns an object with `signal()`, `memo()`, `effect()`, `batch()`, `untracked()`, and `unlink()` methods that work the same way as the global functions, but operate on the store they were created with.
+The `createStore()` returns an object with `signal()`, `memo()`, `resource()`, `effect()`, `batch()`, `untracked()`, and `unlink()` methods that work the same way as the global functions, but operate on the store they were created with.
 
-The global functions `signal()`, `memo()`, `effect()`, and `batch()` are simply shortcuts for the default library-global store.
+The global functions `signal()`, `memo()`, `resource()`, `effect()`, and `batch()` are simply shortcuts for the default library-global store.
 
 The `unlink()` method of a `Store` instance can be used to unlink (cancel) all effects and memos in the store. This should be used as a cleanup mechanism when the store is no longer needed.
 

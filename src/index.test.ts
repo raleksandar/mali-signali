@@ -6,6 +6,7 @@ import type {
     BatchFunction,
     EffectConstructor,
     MemoConstructor,
+    ResourceConstructor,
     Signal,
     SignalConstructor,
     Store,
@@ -26,6 +27,7 @@ describe('public API', () => {
         expect(store.batch).toBeInstanceOf(Function);
         expect(store.untracked).toBeInstanceOf(Function);
         expect(store.unlink).toBeInstanceOf(Function);
+        expect(store.resource).toBeInstanceOf(Function);
     });
 
     it('should expose the signal() function', async () => {
@@ -111,6 +113,19 @@ describe('public API', () => {
         const [get] = api.signal(42);
         const value = api.memo(() => get() * 2);
         expect(value()).toBe(84);
+    });
+
+    it('should expose the resource() function', async () => {
+        expect(api.resource).toBeDefined();
+        expect(api.resource).toBeInstanceOf(Function);
+        expectTypeOf(api.resource).toEqualTypeOf<ResourceConstructor>();
+
+        const [read, controls] = api.resource(async () => 42);
+
+        expect(read().status).toBe('loading');
+        expect(controls.refresh).toBeInstanceOf(Function);
+        expect(controls.cancel).toBeInstanceOf(Function);
+        expect(controls.reset).toBeInstanceOf(Function);
     });
 
     it('should expose the batch() function', async () => {

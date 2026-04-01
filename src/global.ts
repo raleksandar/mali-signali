@@ -4,6 +4,7 @@ import {
     createStore,
     type EffectFunction,
     type EffectOptions,
+    type ResourceConstructor,
     type Signal,
     type SignalOptions,
     type SignalReader,
@@ -80,6 +81,19 @@ export function memo<T>(
 ): SignalReader<T> {
     return globalStore.memo(compute, options);
 }
+
+/**
+ * Creates a new async resource in the global store.
+ *
+ * A resource manages async loading state, stale values, and errors.
+ *
+ * @param load The async loader function.
+ * @param options Optional parameters for customizing scheduling and writes.
+ * @returns A state reader and resource controls.
+ */
+export const resource: ResourceConstructor = (load, options) => {
+    return globalStore.resource(load, options);
+};
 
 /**
  * Executes a batch of updates within the global store.

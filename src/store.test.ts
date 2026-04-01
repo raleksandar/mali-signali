@@ -1,5 +1,9 @@
 import { afterAll, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { equalFunc } from './equal';
+import { createAsyncRunner } from './store/async-runner';
+import { createEffect } from './store/effect';
+import type { EffectInstance, StoreState } from './store/internal';
+import { createSignal } from './store/signal';
 import {
     type AsyncEffectFunction,
     type AsyncEffectOptions,
@@ -13,6 +17,11 @@ import {
     type EffectFunction,
     type InvalidationQueue,
     type MemoConstructor,
+    type ResourceConstructor,
+    type ResourceContext,
+    type ResourceOptions,
+    type ResourceState,
+    type RunCause,
     type SignalConstructor,
     type SignalReader,
     type SignalUpdater,
@@ -34,6 +43,17 @@ function deferred<T>() {
 async function flushPromises(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();
+}
+
+function createTestState(): StoreState {
+    return {
+        batchLevel: 0,
+        isUpdating: false,
+        isTracking: false,
+        pendingEffects: new Set(),
+        runs: [],
+        activeEffects: new Set(),
+    };
 }
 
 describe('createStore()', () => {
@@ -752,6 +772,22 @@ describe('effect()', () => {
         expect(runs).toEqual([0]);
     });
 
+    it('Stops sync effects immediately when context.cancel() is called.', () => {
+        const [get, set] = signal(0);
+        const runs: number[] = [];
+
+        effect(({ cancel }) => {
+            runs.push(get());
+            cancel();
+        });
+
+        expect(runs).toEqual([0]);
+
+        set(1);
+
+        expect(runs).toEqual([0]);
+    });
+
     it('Allows concurrent async runs when configured.', async () => {
         const [get, set] = signal(0);
         const first = deferred<void>();
@@ -1210,6 +1246,677 @@ describe('memo()', () => {
     });
 });
 
+describe('resource()', () => {
+    let signal: SignalConstructor;
+    let memo: MemoConstructor;
+    let resource: ResourceConstructor;
+
+    beforeEach(() => {
+        const store = createStore();
+        signal = store.signal;
+        memo = store.memo;
+        resource = store.resource;
+    });
+
+    it('Exposes resource types in the public API.', () => {
+        expectTypeOf<ResourceOptions>().toMatchTypeOf<{
+            writes?: 'latest' | 'settled';
+            concurrency?: 'cancel' | 'concurrent' | 'queue';
+        }>();
+        expectTypeOf<RunCause>().toEqualTypeOf<'init' | 'dependency' | 'refresh' | 'reset'>();
+        expectTypeOf<ResourceContext<number>>().toMatchTypeOf<{
+            previous: ResourceState<number>;
+            cause: RunCause;
+        }>();
+    });
+
+    it('Creates a resource that transitions from loading to ready.', async () => {
+        const [read] = resource(async () => 42);
+
+        expect(read()).toEqual({
+            status: 'loading',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+
+        await flushPromises();
+
+        expect(read()).toEqual({
+            status: 'ready',
+            value: 42,
+            error: undefined,
+            isStale: false,
+        });
+    });
+
+    it('Tracks dependencies before await and reruns with dependency cause.', async () => {
+        const [source, setSource] = signal(1);
+        const causes: RunCause[] = [];
+        const previousStatuses: Array<ResourceState<number>['status']> = [];
+        const [read] = resource(async ({ previous, cause }) => {
+            causes.push(cause);
+            previousStatuses.push(previous.status);
+            return source() * 2;
+        });
+
+        await flushPromises();
+
+        expect(read().value).toBe(2);
+        expect(causes).toEqual(['init']);
+        expect(previousStatuses).toEqual(['idle']);
+
+        setSource(2);
+        await flushPromises();
+
+        expect(read().value).toBe(4);
+        expect(causes).toEqual(['init', 'dependency']);
+        expect(previousStatuses).toEqual(['idle', 'ready']);
+    });
+
+    it('Tracks dependencies after await only when context.track() is used.', async () => {
+        const [tracked, setTracked] = signal(1);
+        const [untracked, setUntracked] = signal(10);
+        const values: Array<[number, number]> = [];
+        const [read] = resource(async ({ track }) => {
+            await Promise.resolve();
+            return [track(tracked), untracked()] as [number, number];
+        });
+
+        await flushPromises();
+        expect(read().value).toEqual([1, 10]);
+
+        setUntracked(20);
+        await flushPromises();
+        expect(read().value).toEqual([1, 10]);
+
+        setTracked(2);
+        await flushPromises();
+        expect(read().value).toEqual([2, 20]);
+
+        values.push(read().value as [number, number]);
+        expect(values).toEqual([[2, 20]]);
+    });
+
+    it('Tracks memo readers when they are wrapped in context.track().', async () => {
+        const [source, setSource] = signal(2);
+        const doubled = memo(() => source() * 2);
+        const [read] = resource(async ({ track }) => {
+            await Promise.resolve();
+            return track(doubled);
+        });
+
+        await flushPromises();
+        expect(read().value).toBe(4);
+
+        setSource(3);
+        await flushPromises();
+        expect(read().value).toBe(6);
+    });
+
+    it('Keeps the previous value while refreshing.', async () => {
+        const pending = deferred<number>();
+        const [read, controls] = resource(async () => pending.promise);
+
+        expect(read().status).toBe('loading');
+
+        pending.resolve(1);
+        await flushPromises();
+
+        controls.refresh();
+
+        expect(read()).toEqual({
+            status: 'loading',
+            value: 1,
+            error: undefined,
+            isStale: true,
+        });
+    });
+
+    it('Runs late cleanup registrations immediately after resource cancellation.', async () => {
+        const pending = deferred<number>();
+        const cleanup = vi.fn();
+        const [read, controls] = resource(async ({ onCleanup }) => {
+            await pending.promise;
+            onCleanup(cleanup);
+            return 1;
+        });
+
+        controls.cancel();
+        pending.resolve(1);
+        await flushPromises();
+
+        expect(cleanup).toBeCalledTimes(1);
+        expect(read()).toEqual({
+            status: 'loading',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+    });
+
+    it('Runs registered cleanup callbacks when a pending resource is canceled.', () => {
+        const pending = deferred<number>();
+        const cleanup = vi.fn();
+        const [read, controls] = resource(async ({ onCleanup }) => {
+            onCleanup(cleanup);
+            return pending.promise;
+        });
+
+        controls.cancel();
+
+        expect(cleanup).toBeCalledTimes(1);
+        expect(read()).toEqual({
+            status: 'loading',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+    });
+
+    it('Runs committed resource cleanup callbacks before the next run and logs thrown cleanup errors.', async () => {
+        const [source, setSource] = signal(1);
+        const cleanup = vi.fn(() => {
+            throw new Error('boom');
+        });
+        const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        try {
+            const [read] = resource(async ({ onCleanup }) => {
+                const value = source();
+                onCleanup(cleanup);
+                return value;
+            });
+
+            await flushPromises();
+            setSource(2);
+            await flushPromises();
+
+            expect(read().value).toBe(2);
+            expect(cleanup).toBeCalledTimes(1);
+            expect(consoleErrorMock).toBeCalledTimes(1);
+            expect(consoleErrorMock.mock.calls[0]?.[0]).toBe('Error during effect cleanup:');
+            expect((consoleErrorMock.mock.calls[0]?.[1] as Error).message).toBe('boom');
+        } finally {
+            consoleErrorMock.mockRestore();
+        }
+    });
+
+    it('Uses refresh cause for manual refreshes.', async () => {
+        const causes: RunCause[] = [];
+        const [read, controls] = resource(async ({ cause }) => {
+            causes.push(cause);
+            return causes.length;
+        });
+
+        await flushPromises();
+        expect(read().value).toBe(1);
+
+        controls.refresh();
+        await flushPromises();
+
+        expect(read().value).toBe(2);
+        expect(causes).toEqual(['init', 'refresh']);
+    });
+
+    it('Allows a resource loader to cancel the current run synchronously.', async () => {
+        let runs = 0;
+        const [read, controls] = resource(async ({ cancel }) => {
+            runs++;
+
+            if (runs === 1) {
+                cancel();
+                return 1;
+            }
+
+            return 2;
+        });
+
+        await flushPromises();
+        expect(read()).toEqual({
+            status: 'loading',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+
+        controls.refresh();
+        await flushPromises();
+
+        expect(read().value).toBe(2);
+    });
+
+    it('Rejects custom queues unless queue concurrency is selected for resources.', () => {
+        const queue = new DefaultInvalidationQueue<AsyncInvalidation>();
+
+        expect(() => {
+            resource(async () => 1, { concurrency: 'cancel', queue });
+        }).toThrowError('The queue option can only be used when concurrency is set to "queue"');
+    });
+
+    it('Preserves previous values on accepted errors.', async () => {
+        const [source, setSource] = signal(0);
+        const [read] = resource<number, Error>(async () => {
+            if (source() === 0) {
+                return 1;
+            }
+            throw new Error('boom');
+        });
+
+        await flushPromises();
+        expect(read().status).toBe('ready');
+
+        setSource(1);
+        await flushPromises();
+
+        expect(read()).toMatchObject({
+            status: 'error',
+            value: 1,
+            isStale: true,
+        });
+        expect((read().error as Error).message).toBe('boom');
+    });
+
+    it('Uses cancel error handling without throwing and keeps the latest error state.', async () => {
+        const handler = vi.fn();
+        const [read] = resource<number, Error>(
+            async () => {
+                throw new Error('boom');
+            },
+            { onError: { mode: 'cancel', handler } },
+        );
+
+        await flushPromises();
+
+        expect(handler).toBeCalledTimes(1);
+        expect(read()).toMatchObject({
+            status: 'error',
+            value: undefined,
+            isStale: false,
+        });
+        expect((read().error as Error).message).toBe('boom');
+    });
+
+    it('Treats synchronously throwing loaders as rejected resource runs.', async () => {
+        const [read] = resource<number, Error>(
+            ((() => {
+                throw new Error('boom');
+            }) as unknown) as (context: ResourceContext<number, Error>) => Promise<number>,
+        );
+
+        await flushPromises();
+
+        expect(read()).toMatchObject({
+            status: 'error',
+            value: undefined,
+            isStale: false,
+        });
+        expect((read().error as Error).message).toBe('boom');
+    });
+
+    it('Uses throw error handling to surface resource rejections on a microtask.', async () => {
+        const handler = vi.fn();
+        let queuedThrow: VoidFunction | undefined;
+        const queueMicrotaskMock = vi
+            .spyOn(globalThis, 'queueMicrotask')
+            .mockImplementation((callback: VoidFunction) => {
+                queuedThrow = callback;
+            });
+
+        try {
+            const [read] = resource<number, Error>(
+                async () => {
+                    throw new Error('boom');
+                },
+                { onError: { mode: 'throw', handler } },
+            );
+
+            await flushPromises();
+
+            expect(handler).toBeCalledTimes(1);
+            expect(queueMicrotaskMock).toBeCalledTimes(1);
+            expect(queuedThrow).toBeInstanceOf(Function);
+            expect(() => queuedThrow?.()).toThrowError('boom');
+            expect((read().error as Error).message).toBe('boom');
+        } finally {
+            queueMicrotaskMock.mockRestore();
+        }
+    });
+
+    it('Supports latest-only guarded writes by default.', async () => {
+        const [source, setSource] = signal(0);
+        const first = deferred<number>();
+        const second = deferred<number>();
+        const [read] = resource(
+            async () => {
+                if (source() === 0) {
+                    return first.promise;
+                }
+                return second.promise;
+            },
+            { concurrency: 'concurrent' },
+        );
+
+        setSource(1);
+
+        second.resolve(2);
+        await flushPromises();
+        expect(read().value).toBe(2);
+
+        first.resolve(1);
+        await flushPromises();
+        expect(read().value).toBe(2);
+    });
+
+    it('Coalesces invalidations while a canceled resource run is still settling.', async () => {
+        const [source, setSource] = signal(0);
+        const first = deferred<number>();
+        const second = deferred<number>();
+        const starts: number[] = [];
+        const [read] = resource(async () => {
+            const value = source();
+            starts.push(value);
+            return starts.length === 1 ? first.promise : second.promise;
+        });
+
+        setSource(1);
+        setSource(2);
+
+        first.resolve(0);
+        await flushPromises();
+
+        second.resolve(2);
+        await flushPromises();
+
+        expect(starts).toEqual([0, 2]);
+        expect(read().value).toBe(2);
+    });
+
+    it('Allows settled writes to overwrite in completion order.', async () => {
+        const [source, setSource] = signal(0);
+        const first = deferred<number>();
+        const second = deferred<number>();
+        const [read] = resource(
+            async () => {
+                if (source() === 0) {
+                    return first.promise;
+                }
+                return second.promise;
+            },
+            { concurrency: 'concurrent', writes: 'settled' },
+        );
+
+        setSource(1);
+
+        second.resolve(2);
+        await flushPromises();
+        expect(read().value).toBe(2);
+
+        first.resolve(1);
+        await flushPromises();
+        expect(read().value).toBe(1);
+    });
+
+    it('Cancels active work without resetting state and allows refreshing again.', async () => {
+        const [trigger] = signal(0);
+        const first = deferred<number>();
+        const second = deferred<number>();
+        let runs = 0;
+        const [read, controls] = resource(async ({ signal }) => {
+            trigger();
+            runs++;
+            const pending = runs === 1 ? first : second;
+            await pending.promise;
+            return signal.aborted ? -1 : runs;
+        });
+
+        controls.cancel();
+        first.resolve(1);
+        await flushPromises();
+
+        expect(read()).toEqual({
+            status: 'loading',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+
+        controls.refresh();
+        expect(read().status).toBe('loading');
+
+        second.resolve(2);
+        await flushPromises();
+
+        expect(read().value).toBe(2);
+    });
+
+    it('Does not abort a resource run twice when controls.cancel() is called after it was already aborted.', async () => {
+        const [trigger, setTrigger] = signal(0);
+        const first = deferred<number>();
+        const second = deferred<number>();
+        const firstSignals: AbortSignal[] = [];
+        const [read, controls] = resource(async ({ signal }) => {
+            const value = trigger();
+
+            if (value === 0) {
+                firstSignals.push(signal);
+                return first.promise;
+            }
+
+            return second.promise;
+        });
+
+        setTrigger(1);
+        expect(firstSignals[0]?.aborted).toBe(true);
+
+        controls.cancel();
+        first.resolve(0);
+        await flushPromises();
+
+        expect(read().status).toBe('loading');
+
+        second.resolve(2);
+        await flushPromises();
+
+        expect(read().status).toBe('loading');
+    });
+
+    it('Does not resubscribe post-await tracked dependencies from canceled stale runs.', async () => {
+        const [trigger, setTrigger] = signal(0);
+        const [trackedAfterAwait, setTrackedAfterAwait] = signal(0);
+        const first = deferred<void>();
+        const second = deferred<void>();
+        const runs: number[] = [];
+        const trackedValues: number[] = [];
+        const [read] = resource(
+            async ({ track }) => {
+                const value = trigger();
+                runs.push(value);
+
+                if (value === 0) {
+                    await first.promise;
+                    trackedValues.push(track(trackedAfterAwait));
+                    return 0;
+                }
+
+                await second.promise;
+                return 1;
+            },
+            { concurrency: 'cancel' },
+        );
+
+        setTrigger(1);
+        first.resolve();
+        await flushPromises();
+
+        expect(read().status).toBe('loading');
+
+        second.resolve();
+        await flushPromises();
+
+        expect(read().value).toBe(1);
+        expect(runs).toEqual([0, 1]);
+        expect(trackedValues).toEqual([0]);
+
+        setTrackedAfterAwait(1);
+        await flushPromises();
+
+        expect(runs).toEqual([0, 1]);
+    });
+
+    it('Resets to idle and reruns on the next dependency invalidation.', async () => {
+        const [source, setSource] = signal(1);
+        const [read, controls] = resource(async () => source() * 2);
+
+        await flushPromises();
+        expect(read().value).toBe(2);
+
+        controls.reset();
+        expect(read()).toEqual({
+            status: 'idle',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+
+        setSource(2);
+        expect(read().status).toBe('loading');
+
+        await flushPromises();
+        expect(read().value).toBe(4);
+    });
+
+    it('Clears queued invalidations when canceled or reset.', async () => {
+        const [source, setSource] = signal(0);
+        const pending = deferred<number>();
+        const items: AsyncInvalidation[] = [];
+        const queue = {
+            enqueue: vi.fn((item: AsyncInvalidation) => items.push(item)),
+            dequeue: vi.fn(() => items.shift()),
+            clear: vi.fn(() => {
+                items.length = 0;
+            }),
+            get size() {
+                return items.length;
+            },
+        } satisfies InvalidationQueue<AsyncInvalidation>;
+
+        const controls = resource(
+            async () => {
+                source();
+                return pending.promise;
+            },
+            { concurrency: 'queue', queue },
+        )[1];
+
+        setSource(1);
+        setSource(2);
+        controls.cancel();
+        controls.reset();
+
+        expect(queue.enqueue).toBeCalledTimes(2);
+        expect(queue.clear).toBeCalledTimes(2);
+        expect(queue.size).toBe(0);
+
+        pending.resolve(1);
+        await flushPromises();
+    });
+
+    it('Supports queue concurrency for resource loads.', async () => {
+        const [source, setSource] = signal(0);
+        const first = deferred<number>();
+        const second = deferred<number>();
+        const third = deferred<number>();
+        const starts: number[] = [];
+        const [read] = resource(
+            async () => {
+                const value = source();
+                starts.push(value);
+                if (starts.length === 1) {
+                    return first.promise;
+                }
+                if (starts.length === 2) {
+                    return second.promise;
+                }
+                return third.promise;
+            },
+            { concurrency: 'queue' },
+        );
+
+        setSource(1);
+        setSource(2);
+
+        first.resolve(0);
+        await flushPromises();
+        second.resolve(2);
+        await flushPromises();
+        third.resolve(2);
+        await flushPromises();
+
+        expect(starts).toEqual([0, 2, 2]);
+        expect(read().value).toBe(2);
+    });
+
+    it('Handles pre-aborted lifetime signals without starting.', () => {
+        const controller = new AbortController();
+        controller.abort();
+
+        const [read, controls] = resource(async () => 1, { signal: controller.signal });
+
+        expect(read()).toEqual({
+            status: 'idle',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+
+        controls.refresh();
+        controls.cancel();
+        controls.reset();
+        expect(read().status).toBe('idle');
+    });
+
+    it('Stops the resource when the lifetime signal aborts and ignores later control calls.', async () => {
+        const controller = new AbortController();
+        const pending = deferred<number>();
+        const [read, controls] = resource(async () => pending.promise, { signal: controller.signal });
+
+        controller.abort();
+        controls.refresh();
+        controls.cancel();
+        controls.reset();
+
+        pending.resolve(1);
+        await flushPromises();
+
+        expect(read()).toEqual({
+            status: 'loading',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+    });
+
+    it('Stops already-aborted runs without aborting them twice during store unlink.', async () => {
+        const store = createStore();
+        const pending = deferred<number>();
+        const [read, controls] = store.resource(async () => pending.promise);
+
+        controls.cancel();
+        await store.unlink();
+
+        pending.resolve(1);
+        await flushPromises();
+
+        expect(read()).toEqual({
+            status: 'loading',
+            value: undefined,
+            error: undefined,
+            isStale: false,
+        });
+    });
+});
+
 describe('batch()', () => {
     let signal: SignalConstructor;
     let effect: EffectConstructor;
@@ -1264,6 +1971,220 @@ describe('batch()', () => {
         });
 
         expect(fx).toBeCalledTimes(2);
+    });
+});
+
+describe('createAsyncRunner()', () => {
+    it('Ignores cancelActive() after the runner has already been stopped.', () => {
+        const state = createTestState();
+        const effect: EffectInstance = {
+            isMemo: false,
+            update() {},
+            cancel() {},
+        };
+
+        const control = createAsyncRunner(state, effect, {}, {
+            prepare() {},
+            execute() {},
+            commit() {},
+        });
+
+        control.stop();
+        control.cancelActive();
+
+        expect(state.activeEffects.size).toBe(0);
+        expect(state.pendingEffects.size).toBe(0);
+    });
+
+    it('Keeps sync subscriptions when prepared state is undefined.', () => {
+        const state = createTestState();
+        const effect: EffectInstance = {
+            isMemo: false,
+            update() {
+                control.invalidate();
+            },
+            cancel() {
+                control.stop();
+            },
+        };
+        const [read, write] = createSignal(state, 0);
+        const runs: number[] = [];
+
+        const control = createAsyncRunner(state, effect, {}, {
+            prepare() {
+                return undefined;
+            },
+            execute() {
+                runs.push(read());
+            },
+            commit() {},
+            shouldCommit(run, _completion, _prepared, info) {
+                return run.generation === info.latestStartedGeneration;
+            },
+        });
+
+        control.invalidate();
+
+        state.batchLevel = 1;
+        write(1);
+
+        expect(runs).toEqual([0]);
+        expect(state.pendingEffects.size).toBe(1);
+    });
+
+    it('Stops the runner on rejected async work when cancel error handling has no custom cancel hook.', async () => {
+        const state = createTestState();
+        const effect: EffectInstance = {
+            isMemo: false,
+            update() {
+                control.invalidate();
+            },
+            cancel() {
+                control.stop();
+            },
+        };
+
+        const control = createAsyncRunner(
+            state,
+            effect,
+            { onError: { mode: 'cancel' } },
+            {
+                prepare() {
+                    return undefined;
+                },
+                execute() {
+                    return Promise.reject(new Error('boom'));
+                },
+                commit() {},
+            },
+        );
+
+        control.invalidate();
+        await flushPromises();
+
+        expect(state.activeEffects.size).toBe(0);
+        expect(state.pendingEffects.size).toBe(0);
+    });
+
+    it('Falls back to committing async results when no shouldCommit hook is provided.', async () => {
+        const state = createTestState();
+        const effect: EffectInstance = {
+            isMemo: false,
+            update() {
+                control.invalidate();
+            },
+            cancel() {
+                control.stop();
+            },
+        };
+        const commits: number[] = [];
+
+        const control = createAsyncRunner(
+            state,
+            effect,
+            {},
+            {
+                prepare() {
+                    return undefined;
+                },
+                execute() {
+                    return Promise.resolve(1);
+                },
+                commit(_run, completion) {
+                    if (completion.status === 'fulfilled') {
+                        commits.push(completion.value);
+                    }
+                },
+            },
+        );
+
+        control.invalidate();
+        await flushPromises();
+
+        expect(commits).toEqual([1]);
+    });
+
+    it('Preserves dependencies idempotently when active work is canceled repeatedly.', async () => {
+        const state = createTestState();
+        const [read] = createSignal(state, 0);
+        const pending = deferred<void>();
+        const effect: EffectInstance = {
+            isMemo: false,
+            update() {
+                control.invalidate();
+            },
+            cancel() {
+                control.stop();
+            },
+        };
+
+        const control = createAsyncRunner(
+            state,
+            effect,
+            {},
+            {
+                prepare() {
+                    return undefined;
+                },
+                execute(context) {
+                    read();
+                    return pending.promise.then(() => {
+                        context.onCleanup(() => {});
+                    });
+                },
+                commit() {},
+                abortRun(run, _prepared, kind, helpers) {
+                    if (kind !== 'control') {
+                        return false;
+                    }
+
+                    run.tracking = false;
+                    run.controller.abort();
+                    run.state = 'canceled';
+                    helpers.preserveRunDependencies(run);
+                    helpers.preserveRunDependencies(run);
+                    helpers.cleanupRun(run);
+                    return true;
+                },
+            },
+        );
+
+        control.invalidate();
+        control.cancelActive();
+        control.cancelActive();
+        pending.resolve();
+        await flushPromises();
+
+        expect(state.activeEffects.size).toBe(1);
+    });
+});
+
+describe('createEffect() internals', () => {
+    it('Returns early when an internal update is attempted after cancelation.', () => {
+        const state = createTestState();
+        const [read] = createSignal(state, 0);
+        const cancel = createEffect(state, () => {
+            read();
+        });
+        const [fx] = Array.from(state.activeEffects);
+
+        cancel();
+        fx?.update();
+
+        expect(state.pendingEffects.size).toBe(0);
+    });
+
+    it('Marks a running sync effect as canceled when the runner stops during execution.', () => {
+        const state = createTestState();
+        const [read] = createSignal(state, 0);
+
+        createEffect(state, ({ cancel }) => {
+            read();
+            cancel();
+        });
+
+        expect(state.activeEffects.size).toBe(0);
+        expect(state.pendingEffects.size).toBe(0);
     });
 });
 
