@@ -152,6 +152,17 @@ With retained previous value:
 
 ## Options and Related Types
 
+### `ResourceStatus`
+
+A string literal union representing the current lifecycle phase of a resource.
+
+| Value | Meaning |
+| --- | --- |
+| `'idle'` | The resource has not started loading, or has been reset. |
+| `'loading'` | A loader run is in progress. |
+| `'ready'` | The loader resolved successfully. |
+| `'error'` | The loader rejected or threw. |
+
 ### `ResourceContext`
 
 `ResourceContext` extends both `EffectContext` and `ResourceControls`, and also adds:

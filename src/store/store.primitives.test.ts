@@ -301,7 +301,7 @@ describe('memo()', () => {
             return value;
         });
 
-        const fx = vi.fn(() => other());
+        const fx = vi.fn(() => { other(); });
 
         effect(fx);
 
