@@ -48,13 +48,14 @@
     ]
   },
   "scripts": {
-    "build": "pkgroll --target=node20 --minify --sourcemap",
+    "build": "pkgroll --target=node20 --minify --sourcemap && pnpm verify:artifact ./dist",
     "lint": "eslint ./src",
     "postpublish": "rm -rf ./package",
-    "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && rm -rf ./package && clean-publish && attw --pack ./package",
+    "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && rm -rf ./package && clean-publish && pnpm verify:artifact ./package/dist && env npm_config_cache=/tmp/npm-cache attw --pack ./package",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:artifact": "node ./scripts/verify-artifact.mjs"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.16.4",
