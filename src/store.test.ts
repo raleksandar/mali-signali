@@ -359,6 +359,27 @@ describe('untracked()', () => {
         expect(a()).toBe(3);
         expect(fx).toBeCalledTimes(2);
     });
+
+    it('Restores tracking when the untracked reader throws.', () => {
+        const [get, set] = signal(0);
+
+        const fx = vi.fn(() => {
+            get();
+        });
+
+        effect(fx);
+
+        expect(() => {
+            untracked(() => {
+                throw new Error('boom');
+            });
+        }).toThrowError('boom');
+
+        set(1);
+        set(2);
+
+        expect(fx).toBeCalledTimes(3);
+    });
 });
 
 describe('memo()', () => {

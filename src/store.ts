@@ -272,11 +272,11 @@ const store = class Store implements Store {
 
         this.#isTracking = false;
 
-        const value = read();
-
-        this.#isTracking = wasTracking;
-
-        return value;
+        try {
+            return read();
+        } finally {
+            this.#isTracking = wasTracking;
+        }
     };
 
     #flush(): void {
@@ -401,14 +401,14 @@ const store = class Store implements Store {
         }
     };
 
-    public unlink(): Promise<void> {
+    public unlink = (): Promise<void> => {
         return Promise.resolve().then(() => {
             for (const fx of this.#activeEffects) {
                 fx.cancel();
             }
             this.#activeEffects.clear();
         });
-    }
+    };
 };
 
 /**

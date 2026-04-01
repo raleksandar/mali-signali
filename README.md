@@ -218,7 +218,7 @@ The `createStore()` function can be used to create an independent store that hol
 
 The signals, memos, and effects from one store are isolated from those of another store and MUST NOT be used interchangeably between stores.
 
-The `createStore()` returns an object with `signal()`, `memo()`, `effect()`, and `batch()` functions that work the same way as the global functions, but operate on the store they were created with.
+The `createStore()` returns an object with `signal()`, `memo()`, `effect()`, `batch()`, `untracked()`, and `unlink()` methods that work the same way as the global functions, but operate on the store they were created with.
 
 The global functions `signal()`, `memo()`, `effect()`, and `batch()` are simply shortcuts for the default library-global store.
 
