@@ -319,17 +319,17 @@ describe('equal()', () => {
         expect(equal(foo, bar, { compare: 'strict', maxDepth: 3 })).toEqual(false);
     });
 
-    it('Handles circular references', () => {
+    it('Returns true for structurally matching circular references.', () => {
         const a: Record<string, unknown> = {};
         const b: Record<string, unknown> = {};
 
         a.a = a;
         b.a = b;
 
-        expect(equal(a, b)).toBe(false);
+        expect(equal(a, b)).toBe(true);
     });
 
-    it('Returns false for repeated shared references.', () => {
+    it('Returns true for repeated shared references.', () => {
         const sharedA = { foo: 1 };
         const sharedB = { foo: 1 };
 
@@ -338,7 +338,7 @@ describe('equal()', () => {
                 { left: sharedA, right: sharedA },
                 { left: sharedB, right: sharedB },
             ),
-        ).toBe(false);
+        ).toBe(true);
     });
 
     it('Returns true when the same left-hand object is compared to distinct but equal right-hand objects.', () => {

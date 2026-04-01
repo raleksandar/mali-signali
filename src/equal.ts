@@ -140,7 +140,10 @@ const hasElement = typeof globalThis.Element === 'function';
  * Implementation of the deep equal() semantics.
  *
  * This function recursively tests two objects for equality making sure not
- * to blow up the call stack when handling circular references.
+ * to blow up the call stack when handling circular references. When the
+ * same `(a, b)` pair is re-encountered during recursion, the function
+ * returns `true` — any structural difference would have been detected
+ * before the cycle closed.
  *
  * @param a - Value to compare to.
  * @param b - Value to compare.
@@ -166,7 +169,7 @@ function deepEqual(a: unknown, b: unknown, params: DeepEqualParams, depth = 0): 
         rhsValues = new Set();
         params.cache.set(a, rhsValues);
     } else if (rhsValues.has(b)) {
-        return false;
+        return true;
     }
 
     rhsValues.add(b);

@@ -3,7 +3,11 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Changed
+- Circular reference handling in `equal()` now returns `true` for structurally matching cycles (aligns with lodash `isEqual` behavior)
+
 ### Fixed
+- `equal()` now correctly returns `true` for objects that share references to structurally equal sub-objects
 - Memo computation throws no longer leave the store in a broken state
 - Effect cleanup detection now uses `typeof` check instead of `instanceof Function` for cross-realm compatibility
 
