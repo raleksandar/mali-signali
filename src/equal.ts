@@ -130,7 +130,7 @@ const TypedArray = Object.getPrototypeOf(Uint8Array) as () => unknown;
  *
  * @param value - The value to check.
  */
-function isTypedArray(value: unknown): value is unknown[] {
+function isTypedArray(value: unknown): value is ArrayLike<number> {
     return value instanceof TypedArray;
 }
 
