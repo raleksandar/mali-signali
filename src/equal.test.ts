@@ -120,6 +120,15 @@ describe('shallowlyEqual()', () => {
         ).toBe(false);
     });
 
+    it('Returns false for two Map objects with structurally equal object keys.', () => {
+        expect(
+            shallowlyEqual(
+                new Map([[{ foo: 1 }, 'bar']]),
+                new Map([[{ foo: 1 }, 'bar']]),
+            ),
+        ).toBe(false);
+    });
+
     it('Returns true for two Set objects with equal entries.', () => {
         expect(
             shallowlyEqual(
@@ -139,6 +148,10 @@ describe('shallowlyEqual()', () => {
                 new Set(['foo', true, '3.14', undefined]),
             ),
         ).toBe(false);
+    });
+
+    it('Returns false for two Set objects with structurally equal object entries.', () => {
+        expect(shallowlyEqual(new Set([{ foo: 1 }]), new Set([{ foo: 1 }]))).toBe(false);
     });
 
     it('Returns true for two arrays with loosely equal elements when using "loose" comparator.', () => {
@@ -314,5 +327,31 @@ describe('equal()', () => {
         b.a = b;
 
         expect(equal(a, b)).toBe(false);
+    });
+
+    it('Returns true for two Map objects with structurally equal object keys.', () => {
+        expect(
+            equal(
+                new Map([[{ foo: { bar: 1 } }, { baz: 2 }]]),
+                new Map([[{ foo: { bar: 1 } }, { baz: 2 }]]),
+            ),
+        ).toBe(true);
+    });
+
+    it('Returns false for two Map objects with equal keys but different mapped values.', () => {
+        expect(
+            equal(
+                new Map([[{ foo: 1 }, { bar: 2 }]]),
+                new Map([[{ foo: 1 }, { bar: 3 }]]),
+            ),
+        ).toBe(false);
+    });
+
+    it('Returns true for two Set objects with structurally equal object entries.', () => {
+        expect(equal(new Set([{ foo: { bar: 1 } }]), new Set([{ foo: { bar: 1 } }]))).toBe(true);
+    });
+
+    it('Returns false for two Set objects with different structured entries.', () => {
+        expect(equal(new Set([{ foo: 1 }]), new Set([{ foo: 2 }]))).toBe(false);
     });
 });

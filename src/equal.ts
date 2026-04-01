@@ -192,13 +192,7 @@ function deepEqual(a: unknown, b: unknown, params: DeepEqualParams, depth = 0): 
             return false;
         }
 
-        for (const [key, value] of a) {
-            if (!b.has(key) || !deepEqual(value, b.get(key), params, depth)) {
-                return false;
-            }
-        }
-
-        return true;
+        return mapsEqual(a, b, params, depth);
     }
 
     if (a instanceof Set) {
@@ -206,13 +200,7 @@ function deepEqual(a: unknown, b: unknown, params: DeepEqualParams, depth = 0): 
             return false;
         }
 
-        for (const value of a) {
-            if (!b.has(value)) {
-                return false;
-            }
-        }
-
-        return true;
+        return setsEqual(a, b, params, depth);
     }
 
     if (isTypedArray(a)) {
@@ -270,4 +258,53 @@ function deepEqual(a: unknown, b: unknown, params: DeepEqualParams, depth = 0): 
  */
 function isObject(value: unknown): value is Record<string | number, unknown> {
     return value !== null && typeof value === 'object';
+}
+
+function mapsEqual(
+    a: Map<unknown, unknown>,
+    b: Map<unknown, unknown>,
+    params: DeepEqualParams,
+    depth: number,
+): boolean {
+    const rhsEntries = Array.from(b.entries());
+
+    outer: for (const [lhsKey, lhsValue] of a) {
+        for (let i = 0; i < rhsEntries.length; i++) {
+            const [rhsKey, rhsValue] = rhsEntries[i]!;
+
+            if (
+                deepEqual(lhsKey, rhsKey, params, depth) &&
+                deepEqual(lhsValue, rhsValue, params, depth)
+            ) {
+                rhsEntries.splice(i, 1);
+                continue outer;
+            }
+        }
+
+        return false;
+    }
+
+    return rhsEntries.length === 0;
+}
+
+function setsEqual(
+    a: Set<unknown>,
+    b: Set<unknown>,
+    params: DeepEqualParams,
+    depth: number,
+): boolean {
+    const rhsValues = Array.from(b.values());
+
+    outer: for (const lhsValue of a) {
+        for (let i = 0; i < rhsValues.length; i++) {
+            if (deepEqual(lhsValue, rhsValues[i], params, depth)) {
+                rhsValues.splice(i, 1);
+                continue outer;
+            }
+        }
+
+        return false;
+    }
+
+    return rhsValues.length === 0;
 }
