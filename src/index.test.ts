@@ -61,10 +61,13 @@ describe('public API', () => {
             concurrency?: 'cancel' | 'concurrent' | 'queue';
         }>();
 
+        const read = () => 1;
         const cleanup = api.effect(
-            async ({ signal, onCleanup }) => {
+            async ({ signal, onCleanup, track }) => {
                 void signal.aborted;
                 onCleanup(() => {});
+                expectTypeOf(track).toEqualTypeOf<<T>(read: () => T) => T>();
+                void track(read);
                 await Promise.resolve();
             },
             { concurrency: 'cancel' },

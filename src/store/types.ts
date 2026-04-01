@@ -152,6 +152,14 @@ export interface EffectContext {
     cancel: (this: void) => void;
 
     /**
+     * Reads the value of a signal or memo and tracks it as a dependency.
+     *
+     * This is useful in async effects after the first `await`, where reads
+     * are otherwise intentionally untracked.
+     */
+    track<T>(read: SignalReader<T>): T;
+
+    /**
      * Abort signal for the current effect run.
      */
     readonly signal: AbortSignal;

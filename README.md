@@ -98,7 +98,7 @@ effect(() => {
 });
 ```
 
-Effects can also be asynchronous. Signal reads are tracked only until the first `await`, so any reads after that point are intentionally untracked.
+Effects can also be asynchronous. Signal reads are tracked only until the first `await`, so any reads after that point are intentionally untracked unless they are wrapped in `context.track()`.
 
 ```ts
 import { signal, effect } from 'mali-signali';
@@ -121,6 +121,19 @@ effect(async ({ signal, onCleanup }) => {
   });
 
   wallet.update(parsedWallet);
+});
+```
+
+If you need to add dependencies after the first `await`, call `track()` explicitly for each signal or memo reader you want to subscribe to:
+
+```ts
+effect(async ({ track }) => {
+  await Promise.resolve();
+
+  const a = track(signalA);
+  const b = track(signalB);
+
+  console.log(a, b);
 });
 ```
 

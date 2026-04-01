@@ -82,6 +82,11 @@ async function verifyDeclarationFile(filePath) {
     );
     assert.match(
         content,
+        /track<T>\(read: SignalReader<T>\): T;/,
+        `${path.basename(filePath)} must declare effect context track()`,
+    );
+    assert.match(
+        content,
         /declare class DefaultInvalidationQueue<T = AsyncInvalidation> implements InvalidationQueue<T>/,
         `${path.basename(filePath)} must declare DefaultInvalidationQueue`,
     );
@@ -113,4 +118,25 @@ async function verifyAsyncEffectRuntime(module, label) {
     await Promise.resolve();
 
     assert.equal(runs.length, 2, `${label} pre-await reads must remain tracked`);
+
+    const trackedAfterAwaitRuns = [];
+    const [lateTracked, setLateTracked] = store.signal(0);
+
+    store.effect(async ({ track }) => {
+        await Promise.resolve();
+        trackedAfterAwaitRuns.push(track(lateTracked));
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    setLateTracked(1);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(
+        trackedAfterAwaitRuns.length,
+        2,
+        `${label} context.track() must subscribe post-await reads`,
+    );
 }

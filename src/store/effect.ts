@@ -6,6 +6,7 @@ import type {
     AsyncEffectFunction,
     EffectContext,
     EffectFunction,
+    SignalReader,
 } from './types';
 
 export function createEffect(
@@ -212,6 +213,32 @@ export function createEffect(
         cleanupRun(run);
     };
 
+    const track = <T>(run: EffectRun, read: SignalReader<T>): T => {
+        if (
+            !run.active ||
+            run.state === 'canceled' ||
+            run.dependenciesComplete ||
+            run.cleanupComplete
+        ) {
+            return read();
+        }
+
+        const wasTracking = state.isTracking;
+        const previousTracking = run.tracking;
+
+        state.runs.push(run);
+        state.isTracking = true;
+        run.tracking = true;
+
+        try {
+            return read();
+        } finally {
+            run.tracking = previousTracking;
+            state.isTracking = wasTracking;
+            state.runs.pop();
+        }
+    };
+
     const startRun = (): void => {
         clearCommittedRun();
 
@@ -229,6 +256,9 @@ export function createEffect(
         try {
             result = execute({
                 cancel,
+                track<T>(read: SignalReader<T>): T {
+                    return track(run, read);
+                },
                 signal: run.signal,
                 onCleanup(cleanup) {
                     registerCleanup(run, cleanup);

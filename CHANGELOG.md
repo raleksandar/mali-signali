@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Added
+- `EffectContext.track()` - Explicitly tracks signal and memo readers in async effects after the first `await`.
 
 ## [1.3.1] - 2026-04-01
 ### Fixed

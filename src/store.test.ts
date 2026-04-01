@@ -182,12 +182,14 @@ describe('effect()', () => {
     let signal: SignalConstructor;
     let effect: EffectConstructor;
     let batch: BatchFunction;
+    let memo: MemoConstructor;
 
     beforeEach(() => {
         const store = createStore();
         signal = store.signal;
         effect = store.effect;
         batch = store.batch;
+        memo = store.memo;
     });
 
     const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -206,6 +208,12 @@ describe('effect()', () => {
         expectTypeOf<AsyncEffectFunction>().toEqualTypeOf<
             (context: EffectContext) => Promise<void>
         >();
+    });
+
+    it('Exposes context.track() in the public effect types.', () => {
+        expectTypeOf<EffectContext>().toMatchTypeOf<{
+            track: <T>(read: SignalReader<T>) => T;
+        }>();
     });
 
     it('Allows async effect options in the public types.', () => {
@@ -527,6 +535,70 @@ describe('effect()', () => {
         ]);
     });
 
+    it('Tracks post-await reads when they are wrapped in context.track().', async () => {
+        const [trackedAfterAwait, setTrackedAfterAwait] = signal(1);
+        const runs: number[] = [];
+
+        effect(async ({ track }) => {
+            await Promise.resolve();
+            runs.push(track(trackedAfterAwait));
+        });
+
+        await flushPromises();
+        expect(runs).toEqual([1]);
+
+        setTrackedAfterAwait(2);
+        await flushPromises();
+        expect(runs).toEqual([1, 2]);
+    });
+
+    it('Tracks multiple post-await dependencies through multiple context.track() calls.', async () => {
+        const [a, setA] = signal(1);
+        const [b, setB] = signal(10);
+        const runs: Array<[number, number]> = [];
+
+        effect(async ({ track }) => {
+            await Promise.resolve();
+            runs.push([track(a), track(b)]);
+        });
+
+        await flushPromises();
+        expect(runs).toEqual([[1, 10]]);
+
+        setA(2);
+        await flushPromises();
+        expect(runs).toEqual([
+            [1, 10],
+            [2, 10],
+        ]);
+
+        setB(20);
+        await flushPromises();
+        expect(runs).toEqual([
+            [1, 10],
+            [2, 10],
+            [2, 20],
+        ]);
+    });
+
+    it('Tracks memos when they are read through context.track() after await.', async () => {
+        const [base, setBase] = signal(2);
+        const localMemo = memo(() => base() * 2);
+        const runs: number[] = [];
+
+        effect(async ({ track }) => {
+            await Promise.resolve();
+            runs.push(track(localMemo));
+        });
+
+        await flushPromises();
+        expect(runs).toEqual([4]);
+
+        setBase(3);
+        await flushPromises();
+        expect(runs).toEqual([4, 6]);
+    });
+
     it('Aborts stale async runs and coalesces reruns by default.', async () => {
         const [get, set] = signal(0);
         const firstRun = deferred<void>();
@@ -606,6 +678,36 @@ describe('effect()', () => {
         expect(runs).toEqual([0]);
     });
 
+    it('Does not resubscribe dependencies when context.track() is called from a canceled stale run.', async () => {
+        const [trigger, setTrigger] = signal(0);
+        const [trackedAfterAwait, setTrackedAfterAwait] = signal(0);
+        const pending = deferred<void>();
+        const runs: number[] = [];
+        const trackedValues: number[] = [];
+
+        effect(async ({ track }) => {
+            const value = trigger();
+            runs.push(value);
+
+            if (value === 0) {
+                await pending.promise;
+                trackedValues.push(track(trackedAfterAwait));
+            }
+        });
+
+        setTrigger(1);
+        pending.resolve();
+        await flushPromises();
+
+        expect(runs).toEqual([0, 1]);
+        expect(trackedValues).toEqual([0]);
+
+        setTrackedAfterAwait(1);
+        await flushPromises();
+
+        expect(runs).toEqual([0, 1]);
+    });
+
     it('Runs async cleanup callbacks immediately if they are registered after cancellation.', async () => {
         const [get, set] = signal(0);
         const pending = deferred<void>();
@@ -683,6 +785,46 @@ describe('effect()', () => {
         await flushPromises();
 
         expect(finishes).toEqual([1, 0]);
+    });
+
+    it('Binds post-await context.track() dependencies to the correct concurrent run.', async () => {
+        const [trigger, setTrigger] = signal(0);
+        const [firstTracked, setFirstTracked] = signal(0);
+        const [secondTracked, setSecondTracked] = signal(0);
+        const first = deferred<void>();
+        const second = deferred<void>();
+        const runs: number[] = [];
+
+        effect(
+            async ({ track }) => {
+                const value = trigger();
+                runs.push(value);
+
+                if (value === 0) {
+                    await first.promise;
+                    track(firstTracked);
+                } else {
+                    await second.promise;
+                    track(secondTracked);
+                }
+            },
+            { concurrency: 'concurrent' },
+        );
+
+        setTrigger(1);
+
+        first.resolve();
+        await flushPromises();
+        second.resolve();
+        await flushPromises();
+
+        setFirstTracked(1);
+        await flushPromises();
+        expect(runs).toEqual([0, 1]);
+
+        setSecondTracked(1);
+        await flushPromises();
+        expect(runs).toEqual([0, 1, 1]);
     });
 
     it('Queues async invalidations when configured.', async () => {
