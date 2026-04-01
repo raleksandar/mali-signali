@@ -85,7 +85,7 @@ API reference: [`docs/api/effects.md`](./docs/api/effects.md)
 
 ### Resources
 
-Resources model async derived state. They expose loading, ready, and error states, keep stale values while refreshing, and provide imperative controls such as `refresh()`, `cancel()`, and `reset()`.
+Resources model async derived state. They expose loading, ready, and error states, keep stale values while refreshing, and provide imperative controls such as `refresh()`, `abort()`, and `reset()`.
 
 API reference: [`docs/api/resources.md`](./docs/api/resources.md)
 
