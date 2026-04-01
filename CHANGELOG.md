@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Fixed
+- Memo computation throws no longer leave the store in a broken state
 - Effect cleanup detection now uses `typeof` check instead of `instanceof Function` for cross-realm compatibility
 
 ## [1.4.0] - 2026-04-02

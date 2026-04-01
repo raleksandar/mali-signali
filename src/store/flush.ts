@@ -6,14 +6,16 @@ export function flushPendingEffects(state: StoreState): void {
     }
     state.isUpdating = true;
 
-    const memos = Array.from(state.pendingEffects).filter((fx) => fx.isMemo);
-
-    for (const fx of memos) {
-        fx.update();
-        state.pendingEffects.delete(fx);
+    try {
+        for (const fx of state.pendingEffects) {
+            if (fx.isMemo) {
+                fx.update();
+                state.pendingEffects.delete(fx);
+            }
+        }
+    } finally {
+        state.isUpdating = false;
     }
-
-    state.isUpdating = false;
 
     if (state.batchLevel > 0) {
         return;

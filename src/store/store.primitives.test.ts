@@ -236,6 +236,85 @@ describe('memo()', () => {
         expect(memoized()).toBe(84);
     });
 
+    it('Propagates errors thrown by the compute function during creation.', () => {
+        expect(() => memo(() => {
+            throw new Error('boom');
+        })).toThrow('boom');
+    });
+
+    it('Propagates errors thrown by compute through the signal setter that triggers recomputation.', () => {
+        const [get, set] = signal(0);
+        let shouldThrow = false;
+
+        memo(() => {
+            const value = get();
+            if (shouldThrow) {
+                throw new Error('boom');
+            }
+            return value * 2;
+        });
+
+        shouldThrow = true;
+
+        expect(() => set(1)).toThrow('boom');
+    });
+
+    it('Becomes inert after compute throws during recomputation.', () => {
+        const [get, set] = signal(0);
+        let shouldThrow = false;
+        const compute = vi.fn(() => {
+            const value = get();
+            if (shouldThrow) {
+                throw new Error('boom');
+            }
+            return value * 2;
+        });
+
+        const memoized = memo(compute);
+
+        expect(memoized()).toBe(0);
+        expect(compute).toHaveBeenCalledTimes(1);
+
+        shouldThrow = true;
+
+        expect(() => set(1)).toThrow('boom');
+        expect(compute).toHaveBeenCalledTimes(2);
+
+        shouldThrow = false;
+
+        set(2);
+        expect(compute).toHaveBeenCalledTimes(2);
+        expect(memoized()).toBe(0);
+    });
+
+    it('Does not break the reactive graph when compute throws during recomputation.', () => {
+        const [get, set] = signal(0);
+        const [other, setOther] = signal(0);
+        let shouldThrow = false;
+
+        memo(() => {
+            const value = get();
+            if (shouldThrow) {
+                throw new Error('boom');
+            }
+            return value;
+        });
+
+        const fx = vi.fn(() => other());
+
+        effect(fx);
+
+        expect(fx).toHaveBeenCalledTimes(1);
+
+        shouldThrow = true;
+
+        expect(() => set(1)).toThrow('boom');
+
+        setOther(1);
+
+        expect(fx).toHaveBeenCalledTimes(2);
+    });
+
     it('Allows customizing the equality check.', () => {
         const [get, set] = signal(0);
 
