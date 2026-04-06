@@ -1,3 +1,7 @@
+# Moved to https://github.com/haragei-dev/signals
+
+---------
+
 # `mali-signali`
 
 `mali-signali` is a lightweight, framework-agnostic TypeScript library for fine-grained reactive state.
